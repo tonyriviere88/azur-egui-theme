@@ -367,26 +367,40 @@ impl Theme {
         }
     }
 
-    /// The light theme. Transcribed from the `[data-theme='light']` block.
+    /// The light theme. The accent and the status hues are the
+    /// `[data-theme='light']` block's; every neutral is
+    /// [`tokens::paper`](mod@crate::tokens::paper)'s.
     ///
     /// Note which way the accent moves: `hover` and `active` step *down* the
     /// azure ramp here (60 → 50 → 40) where dark steps up, because on a light
     /// page a control that brightens when you press it reads as releasing.
     ///
-    /// # The one deviation: no surface is white
+    /// # The deviation: the neutrals are a ramp of their own
     ///
-    /// The surface ladder is [`tokens::paper`](mod@crate::tokens::paper) rather
-    /// than `WHITE` / `GRAY_16` / `GRAY_15` — the same three rungs, the same
-    /// spacing, all of it about a third of a rung lower, so a window that is open
-    /// all day is not a white one. That module says why; the short version is that
-    /// `WHITE` is a document's brightest surface, and an application window is
-    /// mostly chrome.
+    /// Not three surfaces off the CSS's white ladder but eleven rungs at the accent's
+    /// own hue, and the light theme takes all of its greys — surfaces, text, strokes,
+    /// scrollbars — out of it. [`paper`](mod@crate::tokens::paper) is where the
+    /// argument and the measurements live. The two sentences of it:
     ///
-    /// What it costs is measured, not assumed: against the softer canvas a primary
-    /// button's edge is 3.97:1 where it was 4.27:1, still over the 3:1 WCAG asks of
-    /// a boundary; secondary text is 5.9:1 at worst against the 3:1 it needs, and
-    /// body text 14.5:1 against 4.5:1. `theme.rs`'s tests hold each of those floors
+    /// - **`WHITE` is a document's brightest surface**, and an application window is
+    ///   mostly chrome, looked at all day.
+    /// - **The gray ramp has no chroma left where a light theme lives.** `GRAY_16` is
+    ///   C\* 1.08 and `GRAY_1` is C\* 0.64, so the light side was the dark theme's blue
+    ///   with the colour drained out. Every rung here is Lab hue 272 — the dark ramp's
+    ///   own middle, and [`AZURE_60`]'s within a degree.
+    ///
+    /// What it costs is measured, not assumed. The ramp keeps the old `L*` skeleton
+    /// precisely so that it costs almost nothing — contrast depends on `L*` alone — and
+    /// the three figures that did move are these: a primary button's edge against the
+    /// canvas is 3.75:1 where it was 3.97:1, still over the 3:1 WCAG asks of a
+    /// boundary; secondary text is 5.6:1 at worst against the 3:1 it needs; and body
+    /// text is 15.9:1 against 4.5:1. `theme.rs`'s tests hold every one of those floors
     /// on every surface.
+    ///
+    /// That last figure is the ink, and it has been set twice: the rework put it at
+    /// 13.3:1 to get away from a near-black 18.1:1, and it went back to 15.9:1 because
+    /// beside Explorer's own listing 13.3:1 read washed out rather than restrained. See
+    /// [`crate::tokens::paper`].
     ///
     /// To put the CSS's white back:
     ///
@@ -403,6 +417,8 @@ impl Theme {
     /// t.bg.control_disabled = palette::GRAY_15;
     /// t.row_alt = palette::GRAY_15;
     /// ```
+    ///
+    /// [`AZURE_60`]: palette::AZURE_60
     pub fn light() -> Self {
         use palette::*;
         Self {
@@ -414,14 +430,18 @@ impl Theme {
                 layer_alt: paper::SHADE,
                 card: paper::SHEET,
                 card_hover: paper::SHADE,
-                overlay: Color32::from_rgba_unmultiplied(18, 19, 22, 102), // rgba(18,19,22,.4)
+                // The scrim, and the one place a *black* is still wanted: it dims what
+                // is behind a modal, and a tinted dimming reads as a coloured pane
+                // rather than as an absence. Taken to the ink's hue and no further,
+                // which is the CSS's own value cooled rather than replaced.
+                overlay: Color32::from_rgba_unmultiplied(16, 20, 29, 102), // rgba(16,20,29,.4)
                 control: paper::SHEET,
                 control_hover: paper::SHADE,
-                control_active: GRAY_14,
+                control_active: paper::SLATE_7,
                 // The CSS gives a disabled control the same gray as a hovered one
                 // — it is `text.disabled` and the missing pointer that say it is
                 // dead, not the fill — so it moves with the hover rather than
-                // staying behind on `GRAY_15`.
+                // staying behind a rung.
                 control_disabled: paper::SHADE,
             },
 
@@ -429,8 +449,8 @@ impl Theme {
                 default: AZURE_60,
                 hover: AZURE_50,
                 active: AZURE_40,
-                disabled: GRAY_13,
-                // One value, both jobs, exactly as the CSS has it: on a white page
+                disabled: paper::SLATE_6,
+                // One value, both jobs, exactly as the CSS has it: on a light page
                 // `AZURE_60` is dark enough to hold white text (4.6:1) and dark
                 // enough to be text. It is not a *strong* ink on `AZURE_100`
                 // (3.4:1, the CSS's own pairing) — but that is the light theme's
@@ -443,19 +463,19 @@ impl Theme {
             },
 
             text: TextColors {
-                primary: GRAY_1,
-                secondary: GRAY_8,
-                tertiary: GRAY_9,
-                disabled: GRAY_12,
+                primary: paper::SLATE_0,
+                secondary: paper::SLATE_1,
+                tertiary: paper::SLATE_2,
+                disabled: paper::SLATE_5,
                 on_accent: WHITE,
                 link: AZURE_60,
             },
 
             stroke: Strokes {
-                default: GRAY_13,
-                subtle: GRAY_14,
-                strong: GRAY_10,
-                control: GRAY_12,
+                default: paper::SLATE_6,
+                subtle: paper::SLATE_7,
+                strong: paper::SLATE_3,
+                control: paper::SLATE_5,
                 focus: AZURE_60,
             },
 
@@ -473,8 +493,8 @@ impl Theme {
             },
 
             scrollbar: Scrollbar {
-                thumb: GRAY_13,
-                thumb_hover: GRAY_11,
+                thumb: paper::SLATE_6,
+                thumb_hover: paper::SLATE_4,
             },
 
             row_alt: paper::SHADE,

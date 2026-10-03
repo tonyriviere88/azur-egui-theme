@@ -70,7 +70,7 @@ fn message_row(ui: &mut Ui, t: &Theme, message: &str, error: bool, enabled: bool
     super::galley_left_center(ui, rect, galley);
 }
 
-/// Which of the four rules a field's border is following.
+/// Which of the four rules a field's border is following, and what it is painted on.
 ///
 /// Passed in rather than worked out, because the two interesting members are only known after the
 /// input inside the field has run — see [`field_frame`].
@@ -82,6 +82,34 @@ pub struct FieldLook {
     /// [`field_hovered`], and not a response's `hovered()` — the doc there says why.
     pub hovered: bool,
     pub error: bool,
+    /// The surface to paint the field with, when it is not `background-control`.
+    ///
+    /// **For a field that sits in a bar rather than on a panel.** Azur's field fill assumes the
+    /// field is a control on `background-layer`, which is the case a form is; a filter box at the
+    /// end of a path bar, or a search box in a toolbar, is painted on a surface the token has
+    /// never heard of, and a field a shade off the two points of bar around it reads as a hole in
+    /// it rather than as a control on it.
+    ///
+    /// `None` for every ordinary field, which is why this is an `Option` rather than a colour with
+    /// a default: the token is still the answer unless a caller has a surface of its own.
+    ///
+    /// [`TextField::fill`] is the only builder that sets it. The other three composite fields pass
+    /// `None`; a `SearchBox` in a toolbar wants the same thing and can have the same two lines the
+    /// day something asks for it.
+    pub fill: Option<Color32>,
+    /// The colour of the border **at rest**, when it is not `stroke-control`.
+    ///
+    /// The companion to [`fill`](Self::fill), and for the same situation: a field in a bar is
+    /// outlined against a surface Azur's field ladder never saw. `stroke-control` is sized to
+    /// separate a field from `background-layer`, and against a pale bar it is a hard dark rectangle
+    /// where the design wants the same quiet line everything else in the window is divided by.
+    ///
+    /// **At rest only, and that is deliberate.** `hovered`, `focused`, `error` and `disabled` keep
+    /// Azur's own colours, because those are the field *saying something* — a focus ring in
+    /// `stroke-focus` is the accent doing its most important job — and a border that answered to
+    /// the caller in every state would be a field with no states. So this replaces the one branch
+    /// that is not feedback: the border you see while nothing is happening.
+    pub border: Option<Color32>,
 }
 
 /// Whether the pointer is over the field, for the border's hover state.
@@ -127,13 +155,28 @@ pub fn field_frame(ui: &Ui, slot: egui::layers::ShapeIdx, rect: Rect, t: &Theme,
         focused,
         hovered,
         error,
+        fill,
+        border,
     } = state;
-    let fill = if enabled {
-        t.bg.control
-    } else {
-        t.bg.control_disabled
+    // `background-control` unless the caller named a surface. A field is ordinarily a control
+    // on a panel and takes the control fill; a field sitting *in a bar* is a different case, and
+    // one the token cannot answer — see [`FieldLook::fill`].
+    //
+    // A disabled field keeps `background-control-disabled` either way: what says it is dead is the
+    // fill going flat against its surroundings, and an override that survived being disabled would
+    // take that signal away.
+    let fill = match (enabled, fill) {
+        (false, _) => t.bg.control_disabled,
+        (true, Some(fill)) => fill,
+        (true, None) => t.bg.control,
     };
-    let stroke = field_stroke(t, enabled, focused, hovered, error);
+    // At rest, and only at rest, the caller may name the border. Every other branch is the
+    // field reporting a state and stays Azur's — see [`FieldLook::border`].
+    let resting = enabled && !error && !focused && !hovered;
+    let stroke = match border {
+        Some(border) if resting => border,
+        _ => field_stroke(t, enabled, focused, hovered, error),
+    };
     ui.painter().set(
         slot,
         Shape::Rect(egui::epaint::RectShape::new(
@@ -318,6 +361,8 @@ pub struct TextField<'a> {
     prefix_room: bool,
     suffix: Option<Icon<'a>>,
     text_lift: f32,
+    fill: Option<Color32>,
+    border: Option<Color32>,
 }
 
 impl<'a> TextField<'a> {
@@ -337,7 +382,28 @@ impl<'a> TextField<'a> {
             prefix_room: false,
             suffix: None,
             text_lift: 0.0,
+            fill: None,
+            border: None,
         }
+    }
+
+    /// Paint the field on `fill` rather than on `background-control`.
+    ///
+    /// For a field in a bar rather than on a panel — see [`FieldLook::fill`], which carries the
+    /// argument. Pass the surface the field is sitting in, and the border, the corners and the
+    /// disabled fill are unaffected.
+    pub fn fill(mut self, fill: Color32) -> Self {
+        self.fill = Some(fill);
+        self
+    }
+
+    /// Outline the field in `border` at rest, rather than in `stroke-control`.
+    ///
+    /// See [`FieldLook::border`]. Hover, focus, error and disabled are unaffected — a field still
+    /// says what it is doing.
+    pub fn border(mut self, border: Color32) -> Self {
+        self.border = Some(border);
+        self
     }
 
     pub fn label(mut self, label: impl Into<Cow<'a, str>>) -> Self {
@@ -514,6 +580,8 @@ impl Widget for TextField<'_> {
                     focused: edit.has_focus(),
                     hovered: field_hovered(ui, rect, enabled),
                     error: self.error,
+                    fill: self.fill,
+                    border: self.border,
                 },
             );
             message_row(ui, &t, &self.message, self.error, enabled);
@@ -639,6 +707,8 @@ impl Widget for TextArea<'_> {
                     focused: edit.has_focus(),
                     hovered: field_hovered(ui, rect, enabled),
                     error: self.error,
+                    fill: None,
+                    border: None,
                 },
             );
             message_row(ui, &t, &self.message, self.error, enabled);
@@ -856,6 +926,8 @@ impl Widget for NumberField<'_> {
                     focused: edit.has_focus(),
                     hovered: field_hovered(ui, rect, enabled),
                     error: self.error,
+                    fill: None,
+                    border: None,
                 },
             );
             message_row(ui, &t, &self.message, self.error, enabled);
@@ -959,6 +1031,8 @@ impl Widget for SearchBox<'_> {
                 focused: edit.has_focus(),
                 hovered: field_hovered(ui, rect, enabled),
                 error: false,
+                fill: None,
+                border: None,
             },
         );
         response

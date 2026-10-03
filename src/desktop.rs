@@ -127,7 +127,7 @@
 
 use crate::style::StyleOptions;
 use crate::theme::Theme;
-use crate::tokens::{control, palette};
+use crate::tokens::{control, palette, paper};
 use egui::{Color32, CornerRadius, Painter, Rect, Stroke, StrokeKind, Ui};
 
 /// The line between two panels, in points. One physical pixel of [`seam`].
@@ -169,29 +169,37 @@ pub fn apply(t: &mut Theme) {
 }
 
 /// The rung [`apply`] moves the two hover tokens to — three up Azur's neutral ramp
-/// from the `GRAY_5` its `control-hover` names, and three *down* the light one,
-/// because "away from the surface" points in opposite directions on the two sides.
+/// from the `GRAY_5` its `control-hover` names, and the equivalent distance *down* the
+/// light one, because "away from the surface" points in opposite directions on the two
+/// sides.
 ///
 /// | | hover | ΔL\* off `background-layer` | primary text on it | secondary text |
 /// | --- | --- | --- | --- | --- |
 /// | dark | `GRAY_8` `#4D525C` | 28.5 (the token's own rung: 11.3) | 7.5:1 | 2.9:1 |
-/// | light | `GRAY_13` `#B3B9C4` | 22.4 (the token's own rung: 8.9) | 9.8:1 | 3.9:1 |
+/// | light | [`SLATE_6`] `#ABB8D0` | 21.6 (the token's own rung: 9.2) | 7.3:1 | 3.6:1 |
 ///
-/// The light rung is not the dark one mirrored by eye but by measurement: the dark
-/// move is 2.5× the distance the token asks for, and this is 2.5× of the light one.
-/// Going as dark as `GRAY_9` on that side — which is what the first attempt did, on
-/// the strength of a hex value picked while looking at the dark theme — puts
-/// near-black body text on the hovered row at **3.26:1**, under AA. A hover band is
-/// not an inverted row: the ink does not change when the pointer arrives, so the fill
-/// has to stay on the ink's side of the palette.
+/// The light rung is not the dark one mirrored by eye but by measurement: both are
+/// about 2.5× the distance their own `control-hover` asks for. Going as dark as
+/// `GRAY_9` on that side — which is what the first attempt did, on the strength of a
+/// hex value picked while looking at the dark theme — puts near-black body text on the
+/// hovered row at **3.26:1**, under AA. A hover band is not an inverted row: the ink
+/// does not change when the pointer arrives, so the fill has to stay on the ink's side
+/// of the palette.
+///
+/// The light value is a rung of [`paper`](mod@crate::tokens::paper) rather than of
+/// [`palette`](mod@crate::tokens::palette) since the light theme's neutrals moved onto
+/// their own cool ramp; it sits 0.5 ΔL\* from the `GRAY_13` it replaces, so this table
+/// is the measurement it always was and the fill simply has the theme's blue in it now.
 ///
 /// Private on purpose. [`hover_fill`] is what a call site asks, and it reads the token
 /// back, so an application that moves `control-hover` again moves every hover with it.
+///
+/// [`SLATE_6`]: crate::tokens::paper::SLATE_6
 fn place_hover(t: &Theme) -> Color32 {
     if t.dark {
         palette::GRAY_8
     } else {
-        palette::GRAY_13
+        paper::SLATE_6
     }
 }
 
@@ -222,7 +230,7 @@ pub fn press_fill(t: &Theme) -> Color32 {
     if t.dark {
         palette::GRAY_9
     } else {
-        palette::GRAY_12
+        paper::SLATE_5
     }
 }
 
@@ -477,8 +485,22 @@ mod tests {
         let (dark, light) = (theme(true), theme(false));
         assert_eq!(hover_fill(&dark), palette::GRAY_8);
         assert_eq!(press_fill(&dark), palette::GRAY_9);
-        assert_eq!(hover_fill(&light), palette::GRAY_13);
-        assert_eq!(press_fill(&light), palette::GRAY_12);
+        // The light pair is on `paper`'s ramp rather than the gray one, and within half
+        // a ΔL* of the rungs it replaced — the fills did not move, they gained the
+        // theme's hue. See `place_hover`.
+        assert_eq!(hover_fill(&light), paper::SLATE_6);
+        assert_eq!(press_fill(&light), paper::SLATE_5);
+        for (ours, theirs) in [
+            (hover_fill(&light), palette::GRAY_13),
+            (press_fill(&light), palette::GRAY_12),
+        ] {
+            let moved = crate::contrast::apart(ours, theirs);
+            assert!(
+                moved < 1.0,
+                "the light fill moved {moved:.1} ΔL* off the gray it replaced, which is a \
+                 lightness change and not a hue one — the table by `place_hover` is now wrong"
+            );
+        }
     }
 
     /// A hover has to be visible against every surface it can land on, a press has to

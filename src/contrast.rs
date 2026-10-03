@@ -127,6 +127,11 @@ mod tests {
     /// The measurement the module documentation is about, kept as a test so the
     /// sentence stays true: the old seam was four token names up the dark ramp and
     /// two up the light one, and within 1.5 ΔL\* of itself across the two.
+    ///
+    /// It survived the light theme moving onto [`paper`](crate::tokens::paper)'s cool
+    /// ramp untouched, at 13.95 against the 13.88 it pinned, which is the point of that
+    /// ramp: it keeps the old `L*` skeleton and changes only the chroma, and every
+    /// figure in this crate is a function of `L*` alone.
     #[test]
     fn the_dark_and_light_ramps_are_not_the_same_ramp() {
         let dark = apart(crate::Theme::dark().bg.control_active, palette::GRAY_2);

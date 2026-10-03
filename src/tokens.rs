@@ -77,42 +77,111 @@ pub mod palette {
     pub const RED_70: Color32 = Color32::from_rgb(0xea, 0x4d, 0x54);
 }
 
-/// The light theme's surface ladder, a third of a rung off the token file.
+/// The light theme's own neutral ramp: the accent's hue, at the lightnesses paper
+/// needs.
 ///
-/// Azur's light surfaces are `WHITE`, [`GRAY_16`](palette::GRAY_16) and
-/// [`GRAY_15`](palette::GRAY_15), which is a *document's* ladder: a browser window
-/// is one page, mostly text, looked at for as long as it takes to read. An
-/// application window is a screen of chrome that stays open all day, and pure
-/// white across that much area is what people mean when they call a light theme
-/// aggressive.
+/// Eleven rungs, [`SLATE_0`](paper::SLATE_0) the ink and [`SLATE_10`](paper::SLATE_10)
+/// the brightest sheet, and the light theme takes **every** neutral out of here —
+/// surfaces, text, strokes, scrollbars, hovers. That is the deviation: [`palette`] is
+/// `tokens.css` transcribed and this is not in it.
 ///
-/// So the whole ladder moves down together, and it moves *as* a ladder: what makes
-/// a card read as raised and a menu as set into its panel is the distance between
-/// the rungs, not where the top one is. Those distances are the CSS's, within a
-/// hundredth — sheet to canvas 1.09:1 against 1.08:1, sheet to shade 1.25:1
-/// against 1.24:1 — so only the whiteness is gone.
+/// # Why the light theme cannot use the gray ramp
 ///
-/// | | here | `tokens.css` |
-/// | --- | --- | --- |
-/// | [`SHEET`](paper::SHEET) — panels, cards, controls | `#F7F8FA` | `WHITE` |
-/// | [`CANVAS`](paper::CANVAS) — the window behind them | `#EBEEF3` | `GRAY_16` `#F5F6F8` |
-/// | [`SHADE`](paper::SHADE) — a step off a sheet: menus, hovers, stripes | `#DCE0E8` | `GRAY_15` `#E4E7EC` |
+/// Two separate problems, and the second is the one that made this module a ramp
+/// rather than three surfaces.
 ///
-/// The gray scale has no steps this fine at the top — `GRAY_15` → `GRAY_16` →
-/// `WHITE` is 15, then 9 — so these are interpolated on it, keeping its cool drift
-/// (blue > green > red).
+/// **No surface is white.** Azur's light surfaces are `WHITE`,
+/// [`GRAY_16`](palette::GRAY_16) and [`GRAY_15`](palette::GRAY_15), which is a
+/// *document's* ladder: a browser window is one page, mostly text, looked at for as
+/// long as it takes to read. An application window is a screen of chrome that stays
+/// open all day, and pure white across that much area is what people mean when they
+/// call a light theme aggressive.
 ///
-/// Nothing else moves: text, strokes, accent and status are the CSS's values, and
-/// [`Theme::light`](crate::Theme::light) says how to put the white back.
+/// **And the gray ramp has no colour left at the end a light theme lives at.** This is
+/// the measurement the rework turned on. Chroma in `C*` — CIELAB, the same reason
+/// [`crate::contrast`] measures surfaces in `L*` rather than in bytes:
+///
+/// | | dark theme | light theme, before | here |
+/// | --- | --- | --- | --- |
+/// | the panel content sits on | `GRAY_2` C\* **2.65** | `#F7F8FA` C\* **1.07** | [`SHEET`](paper::SHEET) C\* **4.89** |
+/// | the window behind it | `GRAY_0` C\* 0.49 | `#EBEEF3` C\* **2.76** | [`CANVAS`](paper::CANVAS) C\* **8.17** |
+/// | a step off the sheet | `GRAY_4` C\* 4.46 | `#DCE0E8` C\* **4.37** | [`SHADE`](paper::SHADE) C\* **10.44** |
+/// | body text | `GRAY_16` C\* 1.08 | `GRAY_1` C\* **0.64** | [`SLATE_0`](paper::SLATE_0) C\* **13.24** |
+/// | a hovered row | `GRAY_8` C\* 6.51 | `GRAY_13` C\* **6.27** | [`SLATE_6`](paper::SLATE_6) C\* **13.61** |
+///
+/// The gray ramp is a *cool* ramp where it is dark — the dark theme is a blue theme,
+/// and reads as one — and it gives that up as it climbs, because the top of a neutral
+/// scale is where chroma goes to die: `GRAY_16` is C\* 1.08, which is grey. So the
+/// light theme was the same design system with the colour drained out of it, and the
+/// ink on nearly every pixel of text in the window was a *neutral* near-black.
+///
+/// # What this ramp is
+///
+/// **The dark theme's hue, held constant.** Every rung is Lab hue **272**, which is
+/// where the dark ramp's own middle sits (`GRAY_3` 273.0, `GRAY_4` 273.5, `GRAY_8`
+/// 273.2) and, within a degree, [`AZURE_60`](palette::AZURE_60)'s (272.7). The light
+/// theme is now the same blue the dark one already was, and "inspired by the dark
+/// theme" is a number rather than a taste.
+///
+/// **At the old ramp's lightnesses**, deliberately. Contrast is a function of `L*`
+/// alone, so keeping the `L*` skeleton is what let the chroma roughly double without a
+/// single measured floor moving: no rung is more than 3.5 `L*` from the gray it
+/// replaces. The exceptions are stated rather than hidden:
+///
+/// - **The ink moves, and it moved twice.** The rework took it to `L*` 16.3 (13.3:1) on
+///   the reasoning that `GRAY_1`'s `L*` 4.3 — 18.1:1 on the sheet — is the harshest
+///   thing a light theme can do. Beside Explorer's own file listing, which sets pure
+///   black on pure white at 19.0:1, `L*` 16.3 is not restrained but *washed out*: the
+///   ink is the one rung that is read rather than looked at, and it was the one rung
+///   given away. [`SLATE_0`] is now `L*` 9.0 at **15.9:1** — a near-black that still
+///   carries the ramp's hue, where below about `L*` 6 the chroma stops being
+///   perceptible at text sizes and is paid for with nothing.
+///
+///   It is not taken all the way to black, and that is the ladder's doing rather than
+///   taste: `#000000` is `C*` 0, so the ink would be the one rung off the hue every
+///   other rung is defined by. What that costs is 3.1:1 of contrast nobody is short of.
+/// - **The ladder opens up a little**: sheet to canvas 1.12:1 against the CSS's 1.08:1,
+///   sheet to shade 1.27:1 against 1.24:1. Panels read as panels at a glance, which is
+///   most of what "modern" means about a window divided by seams.
+///
+/// [`SLATE_0`]: paper::SLATE_0
 pub mod paper {
     use egui::Color32;
 
+    /// Body text — `text.primary`. A near-black that keeps the ramp's hue; see the
+    /// [module documentation](self) for why the ink is the one rung that really moved,
+    /// and moved twice.
+    pub const SLATE_0: Color32 = Color32::from_rgb(0x0d, 0x1a, 0x2b);
+    /// `text.secondary` — the metadata columns, and the weak text egui derives.
+    pub const SLATE_1: Color32 = Color32::from_rgb(0x4a, 0x58, 0x6e);
+    /// `text.tertiary` — a mark, a unit, a figure nobody is reading closely.
+    pub const SLATE_2: Color32 = Color32::from_rgb(0x5d, 0x6b, 0x83);
+    /// `stroke.strong` — the one line meant to be seen as a line.
+    pub const SLATE_3: Color32 = Color32::from_rgb(0x67, 0x75, 0x8e);
+    /// A scrollbar thumb under the pointer.
+    pub const SLATE_4: Color32 = Color32::from_rgb(0x7c, 0x8b, 0xa5);
+    /// `text.disabled` and `stroke.control`, and what a control takes while it is
+    /// pressed — [`crate::desktop::press_fill`].
+    pub const SLATE_5: Color32 = Color32::from_rgb(0x93, 0xa1, 0xbb);
+    /// `stroke.default`, a scrollbar at rest, a disabled accent — and the fill under
+    /// the pointer in an application window, [`crate::desktop::hover_fill`].
+    pub const SLATE_6: Color32 = Color32::from_rgb(0xab, 0xb8, 0xd0);
+    /// `stroke.subtle` — so, the seam between two panes — and `bg.control_active`.
+    pub const SLATE_7: Color32 = Color32::from_rgb(0xc1, 0xcd, 0xe2);
+    /// One step off a sheet: `bg.layer_alt`, `row_alt`, a disabled control. Named
+    /// [`SHADE`].
+    pub const SLATE_8: Color32 = Color32::from_rgb(0xd0, 0xda, 0xed);
+    /// The window itself. Named [`CANVAS`].
+    pub const SLATE_9: Color32 = Color32::from_rgb(0xe0, 0xe8, 0xf7);
+    /// The surfaces content sits on. Named [`SHEET`].
+    pub const SLATE_10: Color32 = Color32::from_rgb(0xef, 0xf4, 0xfd);
+
     /// The surfaces content sits *on*: `bg.layer`, `bg.card`, `bg.control`.
-    pub const SHEET: Color32 = Color32::from_rgb(0xf7, 0xf8, 0xfa);
+    pub const SHEET: Color32 = SLATE_10;
     /// The window itself — `bg.canvas`, behind every sheet.
-    pub const CANVAS: Color32 = Color32::from_rgb(0xeb, 0xee, 0xf3);
+    pub const CANVAS: Color32 = SLATE_9;
     /// One step off a sheet: `bg.layer_alt`, the hover fills, `row_alt`.
-    pub const SHADE: Color32 = Color32::from_rgb(0xdc, 0xe0, 0xe8);
+    pub const SHADE: Color32 = SLATE_8;
 }
 
 /// The type ramp (`--azur-font-size-*` / `--azur-line-height-*`).

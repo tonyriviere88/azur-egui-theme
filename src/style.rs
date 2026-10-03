@@ -184,27 +184,48 @@ pub fn visuals(t: &Theme) -> egui::Visuals {
     v.text_cursor.stroke = Stroke::new(1.0, t.text.primary);
     v.text_cursor.blink = true;
 
-    // Glyph coverage goes into the atlas as it comes out of the rasteriser, in both
-    // palettes -- so Azur's regular weight is drawn at its regular weight.
+    // How much of a partially covered pixel is lit: a mild lift on both sides, more of
+    // it on the dark one.
     //
-    // egui's dark default is `TwoCoverageMinusCoverageSq`, `alpha = 2c - c²`, which lifts
-    // every partially covered pixel: at c = 0.25 it writes 0.44. It is compensating for a
-    // real effect -- light-on-dark text loses apparent weight when glyphs are composited
-    // with a plain alpha multiply rather than in linear light -- but the correction is
-    // tuned for white on black, and Azur's dark canvas is `#14171A` with text at
-    // `#F5F6F8`. Over that much smaller range it over-corrects, and the result is a window
-    // whose body text reads as semibold: measured over this design system's own sidebar,
-    // 10% more lit pixels than the glyphs actually cover.
+    // Body text pinned to `Off` on both sides read washed out next to the platform's own
+    // windows -- a stem that covers 60% of a pixel column was drawn at 60%, and at 14px
+    // most stems are partial. A gamma below 1 lifts every partial coverage value, which
+    // is what Windows does too: ClearType applies a gamma of its own plus a contrast
+    // enhancement, both weighted towards light-on-dark.
     //
-    // The same function on both sides also means **the weight does not change when the
-    // palette does**. egui's own defaults differ per side (`Off` for light,
-    // `2c - c²` for dark), so toggling the theme visibly reweighted the text.
+    // **The dark side gets more of it, and that is the whole reason the two differ.**
+    // Light-on-dark text loses apparent weight that dark-on-light does not, so matching
+    // the two sides *numerically* is what makes them look mismatched. The curve acts on
+    // the atlas, which both palettes share, so picking different functions is the only
+    // way to weigh them differently at all.
     //
-    // The cost is stated rather than hidden: at `SIZE_CAPTION` in `text-tertiary` this is
-    // the faintest text the system produces, and it is now drawn at its true coverage.
-    // `FontColorTransferFunction::Gamma(0.85)` is the halfway house if that reads too
-    // light on a particular display.
-    v.text_options.color_transfer_function = egui::epaint::FontColorTransferFunction::Off;
+    // `2c - c²` -- egui's own dark default, and what this crate shipped on the dark side
+    // for one pass -- is the next step up and is too far: on the light palette it is
+    // visibly semibold, which is what an earlier note here called it, and it was right.
+    // These two values sit between that and `Off`.
+    //
+    // **Stated honestly: these are calibrated by eye against Explorer, not to a number.**
+    // Two attempts to put a figure on "the weight Explorer draws at" were both measured
+    // wrongly -- one compared raw ink between palettes whose contrast ranges differ, and
+    // its replacement recovered coverage in gamma-encoded sRGB and averaged it over a
+    // *thresholded* pixel population, so darkening the ink or lifting the gamma enlarged
+    // the population with faint pixels and moved the mean on its own. What survives is
+    // the ordering, which is arithmetic rather than measurement:
+    // `Off` < `Gamma(0.85)` < `Gamma(0.70)` < `2c - c²`. Anything finer wants a metric
+    // that sums coverage over a fixed area, in linear light, with epaint's actual blend
+    // space established rather than assumed.
+    //
+    // **What none of this buys is sharpness.** Explorer does subpixel rendering and
+    // epaint cannot: its atlas holds one coverage value per pixel where ClearType
+    // carries three. That one *is* measured robustly -- the distance each edge pixel
+    // sits off the straight line between background and text colour in RGB space, which
+    // is zero for greyscale antialiasing and large for per-channel: Explorer averages
+    // 92, Azur 0.5, in both palettes. So a lift buys weight and costs a slightly wider
+    // grey smear, and there is no setting here that buys crispness. Which is why this
+    // stops at a mild value instead of chasing Explorer's apparent density.
+    let coverage_gamma = if t.dark { 0.70 } else { 0.85 };
+    v.text_options.color_transfer_function =
+        egui::epaint::FontColorTransferFunction::Gamma(coverage_gamma);
 
     // One rasterisation per glyph, at a whole pixel.
     //
@@ -556,21 +577,49 @@ mod tests {
     }
 
     #[test]
-    fn text_weighs_the_same_in_both_palettes() {
-        // egui's own defaults differ per side, so this is not something to leave alone:
-        // inherit them and the text visibly reweights when the theme is toggled, which
-        // reads as the font having changed.
-        let dark = visuals(&Theme::dark()).text_options.color_transfer_function;
+    fn each_palette_lifts_coverage_and_dark_lifts_further() {
+        // Two different gammas on purpose: the curve acts on the shared atlas, so
+        // picking different functions is the only way to weigh the two sides
+        // differently -- and they must differ, because light-on-dark text loses apparent
+        // weight that dark-on-light does not. `style::visuals` has the reasoning, and is
+        // candid about which parts of it are measured and which are eyeballed.
+        //
+        // The two values that came before these were `Off` on both sides (washed out on
+        // both) and `2c - c²` on the dark side (the next step up, and visibly semibold on
+        // the light palette). Neither is a value to drift back to.
+        assert_eq!(
+            visuals(&Theme::dark()).text_options.color_transfer_function,
+            FontColorTransferFunction::Gamma(0.70),
+            "the dark side takes the larger lift: light-on-dark loses apparent weight"
+        );
+        assert_eq!(
+            visuals(&Theme::light())
+                .text_options
+                .color_transfer_function,
+            FontColorTransferFunction::Gamma(0.85),
+            "the light side takes the smaller one -- matching the two would look mismatched"
+        );
+        // The ordering is the part that is arithmetic rather than eyeballed, so it is the
+        // part worth pinning: both sides lift, and the dark side lifts further.
+        let dark = visuals(&Theme::dark())
+            .text_options
+            .color_transfer_function
+            .to_gamma();
         let light = visuals(&Theme::light())
             .text_options
-            .color_transfer_function;
-        assert_eq!(dark, light, "text is rendered at two different weights");
-        assert_eq!(
-            dark,
-            FontColorTransferFunction::Off,
-            "glyph coverage should reach the atlas unmodified -- a boost draws Azur's \
-             regular weight heavier than it is"
-        );
+            .color_transfer_function
+            .to_gamma();
+        assert!(dark < light, "dark must lift further than light");
+        assert!(light < 1.0, "both sides lift; gamma 1.0 is no correction at all");
+        // Both sides lift coverage, and neither reaches `2c - c²`.
+        for t in [Theme::dark(), Theme::light()] {
+            let g = visuals(&t).text_options.color_transfer_function.to_gamma();
+            assert!(
+                (0.6..1.0).contains(&g),
+                "a gamma outside this range is either no correction at all or the \
+                 semibold that `2c - c²` was"
+            );
+        }
     }
 
     /// Selected text has to be readable on the selection.

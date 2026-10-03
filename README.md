@@ -145,7 +145,7 @@ tab. A *place*, on a listing that is nearly black, where one rung is not enough 
 | | hover | press | primary text on the hover | secondary |
 | --- | --- | --- | --- | --- |
 | dark | `GRAY_8` `#4D525C` | `GRAY_9` | 7.5:1 | 2.9:1 |
-| light | `GRAY_13` `#B3B9C4` | `GRAY_12` | 9.8:1 | 3.9:1 |
+| light | `SLATE_6` `#ABB8D0` | `SLATE_5` | 7.3:1 | 3.6:1 |
 
 *Set the token, never the call sites.* That is not a preference, it is the bug this
 module was extracted after: the window it came from moved its rows, its tree and its
@@ -367,6 +367,20 @@ aligned to, and the platform's own fields centre the same way. It is worth setti
 item in a toolbar of icons, which is where the icons are what the text has to come level with. Only the
 text and the placeholder move; the frame, the affixes and the ✕ are already right. It is the same
 correction [`ink_baseline`](src/components/mod.rs) makes for text a caller paints itself.
+
+`TextField::fill` is the third, and it is about the surface rather than the type. A field's fill is
+`background-control`, which assumes what a form assumes: that the field is a control sitting on
+`background-layer`. A filter box at the end of a path bar, or a search box in a toolbar, is painted on
+a surface the token has never heard of — and a field a shade off the two points of bar around it reads
+as a *hole in the bar* rather than as a control on it. So the caller can name the surface it is putting
+the field in. The border, the corners and the disabled fill are unaffected, and a disabled field keeps
+`background-control-disabled` whatever was passed: what says a control is dead is its fill going flat
+against its surroundings, and an override that survived being disabled would take that signal away.
+
+`None` for every ordinary field, which is why it is an `Option` and not a colour with a default — the
+token is still the answer unless a caller has a surface of its own. `TextField` is the only one of the
+four that offers it today; a `SearchBox` in a toolbar wants the same thing and can have the same two
+lines when something asks.
 
 ### A filter field is its behaviour too
 
@@ -635,29 +649,54 @@ like somebody shipped `Copy pa…`.
 
 ## Where the light theme leaves the CSS on purpose
 
-One, and it is the mirror image of the dark one: **no surface is white.** The CSS
-ladder is `WHITE` → `GRAY_16` → `GRAY_15`, which is a *document's* — a browser
+**Every neutral, because the light theme has a ramp of its own** —
+[`tokens::paper`](src/tokens.rs), eleven rungs from the ink to the brightest sheet.
+Two reasons, and the second is the one that turned three surfaces into a ramp.
+
+**No surface is white**, which is the mirror image of the dark theme's deviation. The
+CSS ladder is `WHITE` → `GRAY_16` → `GRAY_15`, which is a *document's* — a browser
 window is one page, mostly text, looked at for as long as it takes to read. An
 application window is a screen of chrome that stays open all day, and pure white
 across that much area is what people mean when they call a light theme aggressive.
 
-| | sheet — panels, cards, controls | canvas — the window | shade — menus, hovers, stripes |
-| --- | --- | --- | --- |
-| CSS | `WHITE` | `GRAY_16` `#F5F6F8` | `GRAY_15` `#E4E7EC` |
-| here | `#F7F8FA` | `#EBEEF3` | `#DCE0E8` |
+**And the gray ramp has no colour left where a light theme lives.** Chroma in `C*`,
+which is the same reason [`contrast`](src/contrast.rs) measures surfaces in `L*`
+rather than in bytes:
 
-The ladder moves *as* a ladder: what makes a card read as raised and a menu as set
-into its panel is the distance between the rungs, not where the top one is, and
-those distances are the CSS's within a hundredth — 1.09:1 sheet to canvas against
-1.08:1, 1.25:1 sheet to shade against 1.24:1. The three values are
-[`tokens::paper`](src/tokens.rs), interpolated on the gray ramp because it has no
-steps this fine at the top; nothing else moves, and `Theme::light`'s docs put the
-white back in nine lines.
+| | dark theme | light, before | here |
+| --- | --- | --- | --- |
+| the panel content sits on | `GRAY_2` C\* 2.65 | `#F7F8FA` C\* **1.07** | `SLATE_10` `#EFF4FD` C\* **4.89** |
+| the window behind it | `GRAY_0` C\* 0.49 | `#EBEEF3` C\* **2.76** | `SLATE_9` `#E0E8F7` C\* **8.17** |
+| a step off the sheet | `GRAY_4` C\* 4.46 | `#DCE0E8` C\* **4.37** | `SLATE_8` `#D0DAED` C\* **10.44** |
+| body text | `GRAY_16` C\* 1.08 | `GRAY_1` C\* **0.64** | `SLATE_0` `#0D1A2B` C\* **13.24** |
+| a hovered row | `GRAY_8` C\* 6.51 | `GRAY_13` C\* **6.27** | `SLATE_6` `#ABB8D0` C\* **13.61** |
+
+The gray ramp is a *cool* ramp where it is dark — the dark theme is a blue theme and
+reads as one — and it gives that up as it climbs, because the top of a neutral scale
+is where chroma goes to die. So the light side was the same design system with the
+colour drained out of it, and the ink on nearly every pixel of text in the window was
+a neutral near-black. Every rung of `paper` is instead Lab hue **272**: the dark
+ramp's own middle (`GRAY_3` 273.0, `GRAY_4` 273.5, `GRAY_8` 273.2), and `AZURE_60`'s
+within a degree.
+
+**At the old ramp's lightnesses**, deliberately — contrast is a function of `L*`
+alone, so keeping the `L*` skeleton is what let the chroma roughly double without a
+single measured floor moving. No rung is more than 3.5 `L*` from the gray it replaces,
+and the two exceptions are stated rather than hidden. The ink moves, and it moved
+twice: the rework took it from `GRAY_1`'s `L*` 4.3 — a near-black on paper at 18.1:1 —
+out to `L*` 16.3 at 13.3:1, and beside Explorer's own file listing, which sets pure
+black on pure white at 19.0:1, that read washed out rather than restrained. `SLATE_0`
+is now `L*` 9.0 at 15.9:1: a near-black that still carries the ramp's hue, where
+`#000000` would be `C*` 0 and so the one rung off the hue the ramp is defined by. And
+the ladder
+opens up a little: 1.12:1 sheet to canvas against the CSS's 1.08:1, 1.27:1 sheet to
+shade against 1.24:1, so panels read as panels at a glance.
 
 The cost is at the same place dark pays it, and smaller: a primary button's edge is
-3.97:1 against the canvas where white gave 4.27:1, still over the 3:1 WCAG asks of a
-boundary. Secondary text is 5.9:1 at worst, body text 14.5:1, and `theme.rs`'s tests
-measure both on every surface.
+3.75:1 against the canvas where white gave 4.27:1, still over the 3:1 WCAG asks of a
+boundary. Secondary text is 5.6:1 at worst, body text 15.9:1, and `theme.rs`'s tests
+measure both on every surface. `Theme::light`'s docs put the white back in nine
+lines.
 
 ## Where egui's vocabulary is smaller than Azur's
 
