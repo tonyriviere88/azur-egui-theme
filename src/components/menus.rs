@@ -623,6 +623,53 @@ pub fn menu_divider(ui: &mut Ui) {
     ui.add_space(space::S1);
 }
 
+/// What [`menu_header`] allocates: a caption line with `space-2` of air above and below it.
+///
+/// Stated beside the code that allocates it for the reason [`menu_divider_height`] is.
+pub fn menu_header_height() -> f32 {
+    typography::LINE_CAPTION + space::S2 * 2.0
+}
+
+/// A heading over a group of entries in a menu: `caption` in `text-secondary`, and nothing to
+/// click.
+///
+/// **On the labels' own column**, so the heading reads as the title of the entries under it
+/// rather than as one more of them: its text starts where theirs does — past the icon column in a
+/// menu that reserves one, see [`MenuItem::gutter`] — and on the caption baseline, as a shortcut
+/// is. Quieter than an entry by type and by ink, and never hovered, because it is not a place you
+/// can go.
+pub fn menu_header(ui: &mut Ui, text: &str) {
+    let t = theme_of(ui);
+    let metrics = menu_item_metrics();
+    let leading = ui
+        .data(|d| d.get_temp::<bool>(gutter_flag()))
+        .unwrap_or(true);
+    let x_pad = metrics.padding + if leading { metrics.gutter } else { 0.0 };
+
+    let natural = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), t.fonts.caption.clone(), Color32::PLACEHOLDER)
+        .size()
+        .x;
+    report_width(ui, x_pad + natural + metrics.padding);
+
+    let height = menu_header_height();
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    let x = rect.left() + x_pad;
+    let baseline = super::row_baseline(ui.painter(), &t.fonts.caption, rect.top(), height);
+    let galley = truncated(
+        ui,
+        text,
+        t.fonts.caption.clone(),
+        t.text.secondary,
+        (rect.right() - metrics.padding - x).max(0.0),
+    );
+    super::galley_on_baseline(ui.painter(), x, baseline, galley);
+}
+
 /// Azur's `Menu`: a popover of [`MenuItem`]s hung off a button.
 ///
 /// ```no_run

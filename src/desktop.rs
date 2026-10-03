@@ -234,6 +234,22 @@ pub fn press_fill(t: &Theme) -> Color32 {
     }
 }
 
+/// The window's close button under the pointer, and the glyph on it: **one red in every
+/// palette.**
+///
+/// Not a role, and that is the point. Every other fill in the window follows the palette it is
+/// set to; this one is the platform's convention — every window on the desktop turns red there,
+/// and a close button that is grey in one palette and coral in another is one the hand stops
+/// trusting. Read through a role it did move: `status.danger` is two different reds on the two
+/// sides.
+///
+/// Azur's own dark `danger-solid`, `#C22932`, which holds white at 5.74:1 — past what a glyph
+/// needs, and within a byte or two of the `#C42B1C` Windows itself paints.
+pub const CLOSE_FILL: Color32 = Color32::from_rgb(0xc2, 0x29, 0x32);
+
+/// The glyph on [`CLOSE_FILL`].
+pub const CLOSE_INK: Color32 = Color32::WHITE;
+
 /// The hover and pressed fills for a control, whatever surface it is painted on.
 ///
 /// `(hover, pressed)`. Deliberately not a function of the surface — see rule 1 in the

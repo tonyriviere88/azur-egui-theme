@@ -171,6 +171,7 @@ pub mod desktop;
 pub mod filter;
 pub mod fonts;
 pub mod icons;
+pub mod palettes;
 /// Behind the `wgpu` feature, on by default; see [`render`] for why a design system
 /// has an opinion about the graphics backend at all.
 #[cfg(feature = "wgpu")]

@@ -1031,7 +1031,7 @@ impl<'a> TitleBar<'a> {
                 let danger = which == TitleBarAction::Close;
                 let (fill, fg) = if response.hovered() {
                     if danger {
-                        (Some(t.status.danger_solid), t.text.on_accent)
+                        (Some(crate::desktop::CLOSE_FILL), crate::desktop::CLOSE_INK)
                     } else {
                         (Some(t.bg.control_hover), t.text.primary)
                     }

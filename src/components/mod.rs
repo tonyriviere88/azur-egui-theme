@@ -71,7 +71,8 @@ pub use inputs::{
     field_frame, field_hovered, prefix_rect, FieldLook, NumberField, SearchBox, TextArea, TextField,
 };
 pub use menus::{
-    menu_divider, menu_divider_height, menu_frame, menu_item_height, menu_item_height_comfortable,
+    menu_divider, menu_divider_height, menu_frame, menu_header, menu_header_height,
+    menu_item_height, menu_item_height_comfortable,
     menu_item_metrics, popover_frame, submenu, ComboBox, ContextMenu, Menu, MenuItem,
     MenuItemMetrics, Popover, Select, SelectOption,
 };
