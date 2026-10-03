@@ -233,6 +233,24 @@ fn inner_edit(
     response
 }
 
+/// Where a field of `size` puts its leading affix: the square [`TextField::prefix`] paints into.
+///
+/// Public because that affix is sometimes a **control** rather than a glyph — a filter box whose
+/// funnel opens a menu of the listings a name cannot ask for — and a control needs a rect. Ask for
+/// the room with [`TextField::prefix_room`] and paint into this; the two together are the only part
+/// of a field's inside an application should ever be told, and stating it here is what keeps the
+/// arithmetic from being copied out and left to drift when the padding changes.
+///
+/// `field` is the field's own rect — what [`egui::Ui::put`] was given, not the wrapper a label and a
+/// message row make.
+pub fn prefix_rect(field: Rect, size: Size) -> Rect {
+    super::icon_rect(
+        field,
+        field.left() + size.padding_x(),
+        super::control_icon(size),
+    )
+}
+
 /// An 18px square button inside a field — Azur's `.clearButton`.
 ///
 /// Takes its id from the wrapper's rather than from the auto-id sequence: it is
@@ -297,6 +315,7 @@ pub struct TextField<'a> {
     size: Size,
     width: Option<f32>,
     prefix: Option<Icon<'a>>,
+    prefix_room: bool,
     suffix: Option<Icon<'a>>,
     text_lift: f32,
 }
@@ -315,6 +334,7 @@ impl<'a> TextField<'a> {
             size: Size::default(),
             width: None,
             prefix: None,
+            prefix_room: false,
             suffix: None,
             text_lift: 0.0,
         }
@@ -373,6 +393,24 @@ impl<'a> TextField<'a> {
         self
     }
 
+    /// Keep the leading affix's room and paint nothing in it.
+    ///
+    /// **For the one leading affix [`Self::prefix`] cannot express: a *control*.** A glyph is
+    /// something a component can draw, and a button is not — it needs a rect to interact with, a
+    /// response to hang a menu or a tooltip on, and states of its own — so the field stands aside
+    /// and the caller paints there. It is the same division [`field_frame`] draws for a whole
+    /// composite field, one affix at a time: what must not be re-derived is the *room*, because a
+    /// box that grew a control in that corner by shrinking its own text rect would shuffle its
+    /// words sideways the moment the control appeared.
+    ///
+    /// [`prefix_rect`] is where to paint and what to interact with. Set both this and
+    /// [`Self::prefix`] and the glyph is drawn as usual — the room is the same either way, which is
+    /// what makes an affix that is *sometimes* a control possible.
+    pub fn prefix_room(mut self, room: bool) -> Self {
+        self.prefix_room = room;
+        self
+    }
+
     /// A trailing glyph inside the field.
     pub fn suffix(mut self, icon: Icon<'a>) -> Self {
         self.suffix = Some(icon);
@@ -422,8 +460,11 @@ impl Widget for TextField<'_> {
             let mut right = rect.right() - pad;
 
             if let Some(prefix) = self.prefix {
-                let r = super::icon_rect(rect, left, icon);
-                prefix(ui.painter(), r, t.text.secondary);
+                prefix(ui.painter(), prefix_rect(rect, self.size), t.text.secondary);
+            }
+            // The room is the affix's, whether or not this field is what fills it — see
+            // [`TextField::prefix_room`].
+            if self.prefix.is_some() || self.prefix_room {
                 left += icon + gap;
             }
             let show_clear = self.clearable && !self.text.is_empty() && enabled;
@@ -921,5 +962,71 @@ impl Widget for SearchBox<'_> {
             },
         );
         response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Where the words in a small field start, with a leading affix asked for in each of the two
+    /// ways — and in neither.
+    fn text_left(prefix: bool, room: bool) -> f32 {
+        let ctx = egui::Context::default();
+        crate::fonts::install(&ctx);
+        let mut text = String::new();
+        let mut left = f32::NAN;
+        let _ = ctx.run_ui(Default::default(), |ui| {
+            let mut field = TextField::new(&mut text)
+                .placeholder("Filter")
+                .size(Size::Small)
+                .width(FIELD.width())
+                .prefix_room(room);
+            if prefix {
+                field = field.prefix(&search);
+            }
+            // The response is the input's own, so its rect is the text rect the affixes left.
+            left = ui.put(FIELD, field).rect.left();
+        });
+        assert!(left.is_finite(), "the pass never drew the field");
+        left
+    }
+
+    /// A field somewhere with room around it, so `put` places it exactly.
+    const FIELD: Rect = Rect::from_min_max(pos2(20.0, 40.0), pos2(220.0, 64.0));
+
+    /// **The room a leading affix takes is the same whether the field fills it or the caller does.**
+    ///
+    /// Which is the whole of what [`TextField::prefix_room`] promises, and the reason it exists as a
+    /// switch of its own rather than as a caller drawing over a glyph: an affix that is sometimes a
+    /// control must not move the words beside it when it changes hands. Asserted against
+    /// [`TextField::prefix`]'s own room rather than against a number, since the figure is Azur's and
+    /// this is a claim about the two agreeing.
+    #[test]
+    fn a_leading_affix_takes_the_same_room_however_it_is_asked_for() {
+        let bare = text_left(false, false);
+        let glyph = text_left(true, false);
+        let reserved = text_left(false, true);
+
+        assert!(
+            glyph > bare,
+            "a prefix took no room at all: {glyph} against {bare}"
+        );
+        assert_eq!(
+            reserved, glyph,
+            "the reserved room is not the room a prefix takes"
+        );
+
+        // And what the caller was told to paint in is inside the field, in front of the words.
+        let at = prefix_rect(FIELD, Size::Small);
+        assert!(
+            FIELD.contains_rect(at),
+            "the affix is outside the field: {at:?} in {FIELD:?}"
+        );
+        assert!(
+            at.right() <= reserved,
+            "the affix runs under the words: it ends at {} and they start at {reserved}",
+            at.right()
+        );
     }
 }

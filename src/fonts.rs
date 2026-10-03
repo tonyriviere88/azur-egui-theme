@@ -4,6 +4,27 @@
 //! heavier weight registered as a family before [`crate::Fonts`] can name it.
 //! System fonts are used rather than embedded ones: nothing is added to the
 //! binary, and the result looks native next to the platform's own windows.
+//!
+//! # There is no bundled fallback behind them
+//!
+//! [`install_from`] starts from [`egui::FontDefinitions::empty`] rather than from
+//! `default()`, so what an Azur window draws with is exactly the faces found below
+//! and nothing else. epaint's own four — NotoEmoji, Ubuntu-Light, emoji-icon-font
+//! and Hack — used to sit behind them, and they were 1,414,020 bytes of the
+//! largest data objects in a consumer's executable to cover a font read that does
+//! not fail: Segoe UI and Consolas are always on a Windows machine, and this is a
+//! Windows design system.
+//!
+//! Being explicit about it is the load-bearing part. `default()` is `empty()`
+//! *only while epaint's `default_fonts` feature is off*, and that feature is not
+//! this crate's to control: any crate anywhere in a consumer's graph that enables
+//! it turns the four back on for everybody, and the cost would reappear silently.
+//! `empty()` cannot be unified back on.
+//!
+//! What it costs is emoji, which Segoe UI does not carry — a filename with one in
+//! it draws a missing-glyph box. Adding `seguiemj.ttf` to [`PROPORTIONAL`] as a
+//! fallback would take it back at no cost to the binary, in monochrome, since
+//! epaint does not draw colour fonts.
 
 use std::sync::Arc;
 
@@ -55,30 +76,35 @@ pub const MONOSPACE: &[&str] = &[
     "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
 ];
 
-/// Install this platform's UI and monospace faces, falling back to egui's
-/// bundled fonts for anything missing.
+/// Install this platform's UI and monospace faces.
 ///
 /// Returns whether a proportional system face was found — worth logging if you
-/// care that the app looks native, safe to ignore otherwise.
+/// care that the app looks native, safe to ignore otherwise. There is nothing
+/// behind these faces if the read fails; see the module header.
 pub fn install(ctx: &egui::Context) -> bool {
     install_from(ctx, PROPORTIONAL, SEMIBOLD_FILES, MONOSPACE)
 }
 
 /// The same, from font files you choose. Each list is tried in order and the
-/// first file that reads wins; a list that yields nothing leaves egui's own
-/// font for that family in place.
+/// first file that reads wins; a list that yields nothing leaves that family
+/// bound to no font at all, which draws nothing rather than falling back.
 ///
-/// The [`SEMIBOLD`] family is always registered, falling back to the
-/// proportional stack, so [`crate::Fonts`] can never name a family that
-/// does not exist — egui panics on that, and it would be a strange way for a
-/// theme to take down an app.
+/// Every family egui and [`crate::Fonts`] can name is *registered* either way,
+/// which is the part that has to hold: epaint panics on a family that is absent
+/// from the map — it is fine with one bound to an empty list — and it would be a
+/// strange way for a theme to take down an app. [`egui::FontDefinitions::empty`]
+/// registers `Proportional` and `Monospace`, and [`SEMIBOLD`] is inserted below,
+/// falling back to the proportional stack.
 pub fn install_from(
     ctx: &egui::Context,
     proportional: &[&str],
     semibold: &[&str],
     monospace: &[&str],
 ) -> bool {
-    let mut fonts = egui::FontDefinitions::default();
+    // `empty`, not `default`: the four fonts epaint would otherwise put behind these
+    // are 1.4 MB of somebody's executable for a font read that does not fail. See the
+    // module header, including why this cannot be left to the feature flag.
+    let mut fonts = egui::FontDefinitions::empty();
 
     let mut load = |key: &str, candidates: &[&str]| -> bool {
         for path in candidates {
@@ -96,8 +122,9 @@ pub fn install_from(
     let has_semi = load("azur-semi", semibold);
     let has_mono = load("azur-mono", monospace);
 
-    // Inserted at the front rather than replacing the stack, so egui's bundled
-    // fonts stay as the fallback for glyphs the system face lacks.
+    // Inserted at the front rather than replacing the stack, so a consumer that has
+    // added a face of its own to either family keeps it as the fallback for glyphs
+    // the system face lacks. Nothing of epaint's is in there to keep.
     if has_prop {
         fonts
             .families

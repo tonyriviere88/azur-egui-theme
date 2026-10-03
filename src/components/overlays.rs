@@ -109,6 +109,38 @@ pub fn tooltip_at_pointer_ui(response: Response, add: impl FnOnce(&mut Ui)) -> R
     response
 }
 
+/// A body the caller draws, hung off the **widget** rather than the pointer.
+///
+/// [`tooltip_at_pointer_ui`]'s reasoning about the measure, with [`tooltip`]'s anchor: for a field or
+/// a button — something that is its own widget and whose own rect is the right one to hang from —
+/// that wants a small table rather than a sentence.
+///
+/// The case it exists for is a **syntax tooltip**: what you may type on the left, what it does on the
+/// right, one to a line. That cannot be a string, because a value has to start at the same `x` on
+/// every line and the caption face is not monospaced, so the columns have to be measured and drawn.
+/// See `azur-file-explorer`'s filter box, which lays [`crate::filter::MARKERS`] out this way.
+///
+/// ```no_run
+/// # fn demo(ui: &mut egui::Ui) {
+/// use azur_egui_theme::components::tooltip_ui;
+/// let r = ui.button("Filter");
+/// tooltip_ui(r, |ui| {
+///     ui.label("!word");
+///     ui.label("leave it out");
+/// });
+/// # }
+/// ```
+pub fn tooltip_ui(response: Response, add: impl FnOnce(&mut Ui)) -> Response {
+    let t = theme_of_ctx(&response.ctx);
+    let mut tip = egui::Tooltip::for_enabled(&response);
+    tip.popup = tip
+        .popup
+        .frame(tooltip_frame(&t))
+        .width(response.ctx.viewport_rect().width());
+    tip.show(add);
+    response
+}
+
 /// Azur's tooltip frame: `radius-small`, `space-2 space-3`, and the shadow a tooltip floats on.
 fn tooltip_frame(t: &Theme) -> Frame {
     Frame::new()
@@ -210,8 +242,16 @@ fn show_tooltip(response: Response, text: &str, at_pointer: bool) -> Response {
 /// - there is **no whitespace inside** the brackets, which is what `(including
 ///   dotfiles)` fails and no shortcut ever does;
 /// - every `+`-separated part is non-empty and **starts with an uppercase letter or a
-///   digit**, which is how key names are written and how `(optional)` is caught;
+///   numeral**, which is how key names are written and how `(optional)` is caught;
 /// - and at least one uppercase letter appears, so `(2)` is a count rather than a key.
+///
+/// A numeral rather than an ASCII digit, because a key is named by whatever is printed
+/// on it: the leftmost key of an AZERTY number row is `²`, and `(Ctrl+²)` is the
+/// shortcut it writes. That character is `No` rather than `Nd`, so an `is_ascii_digit`
+/// guard reads the whole tooltip as prose and dims none of it — which is how
+/// `Show the console (Ctrl+²)` came to be the one shortcut in a window wearing
+/// `text-primary`. The uppercase rule is untouched and is what still holds the guard
+/// shut: `(²)` on its own is not a key, and `(2)` is still a count.
 ///
 /// What it will still take for a shortcut is a one-word capitalised aside — `(Beta)`.
 /// That is the residue, it is very rare next to the thing being caught, and dimming it
@@ -239,7 +279,9 @@ fn looks_like_keys(keys: &str) -> bool {
     keys.split('+').all(|part| {
         part.chars()
             .next()
-            .is_some_and(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+            // `is_numeric` and not `is_ascii_digit`: `²` is a key on this keyboard and a
+            // numeral in Unicode's `No` rather than its `Nd`. See `shortcut_in`.
+            .is_some_and(|c| c.is_ascii_uppercase() || c.is_numeric())
     }) && keys.chars().any(|c| c.is_ascii_uppercase())
 }
 
@@ -604,6 +646,11 @@ mod tests {
             ),
             // A digit is a key when something else in the chord is a name.
             ("Actual size (Ctrl+0)", "Actual size", " (Ctrl+0)"),
+            // And so is a numeral that is not a digit: `²` is the leftmost key of an
+            // AZERTY number row, and the whole reason the guard asks for a numeral
+            // rather than an ASCII one.
+            ("Show the console (Ctrl+²)", "Show the console", " (Ctrl+²)"),
+            ("Large icons (Ctrl+1)", "Large icons", " (Ctrl+1)"),
             // Brackets earlier in the sentence stay in the sentence: the *last* pair
             // is the one that could be a shortcut.
             (
@@ -629,8 +676,11 @@ mod tests {
             "Number the lines (off by default)",
             // Lowercase, so not a key name however short it is.
             "Rename (optional)",
-            // A count, not a chord — no uppercase letter anywhere in it.
+            // A count, not a chord — no uppercase letter anywhere in it. Which is what
+            // holds the guard shut now that a numeral counts as the start of a key name:
+            // neither of these is a shortcut, and `²` on its own is not one either.
             "New folder (2)",
+            "The second pane (²)",
             // No space before the bracket, so the two are one word.
             "Open readme(F5)",
             // Nothing before the bracket at all.

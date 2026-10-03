@@ -13,7 +13,7 @@ publish = false
 # extra. See `src/render.rs` for the measurement. Turn it off for a consumer that
 # does not draw through wgpu, and nothing here pulls wgpu into its graph.
 default = ["wgpu"]
-wgpu = ["dep:egui-wgpu"]
+wgpu = ["dep:egui-wgpu", "dep:wgpu"]
 
 [dependencies]
 # A theme is only meaningful for the exact egui it styles: `Visuals` field names
@@ -27,14 +27,72 @@ egui = { version = "0.35", default-features = false }
 # windowing, and `egui-wgpu` is where those two types live. Same version as the
 # application's, or `WgpuConfiguration` here would be a different type from the one
 # `NativeOptions` wants.
-egui-wgpu = { version = "0.35", optional = true }
+#
+# `default-features = false` is load-bearing and not tidiness. `egui-wgpu`'s default feature is
+# `["fragile-send-sync-non-atomic-wasm", "macos-window-resize-jitter-fix", "wgpu/default",
+# "wgpu/webgl"]`, and `wgpu/default` is *every backend wgpu has* — so taking the default here
+# compiles D3D12, Vulkan, Metal, WebGPU and both GL paths into every consumer, which measured
+# 531,456 bytes of the file explorer's executable for backends `render` never selects. The two
+# features named below are the half of that default which is not a backend, and both are wanted.
+egui-wgpu = { version = "0.35", optional = true, default-features = false, features = [
+    "fragile-send-sync-non-atomic-wasm",
+    "macos-window-resize-jitter-fix",
+] }
+
+# The backends themselves, named here rather than left to `wgpu/default`, because *which backend
+# an Azur window presents on is this crate's decision* — `render::preferred` already makes it, and
+# a feature set that compiles in three more is the same decision made twice.
+#
+# **One backend per platform, and no fallbacks.** Vulkan is what `render` asks for on Windows and
+# Metal is the native path everywhere Apple; each costs nothing on the platform that is not its
+# own, because `wgpu-hal` compiles neither outside its `cfg`. Both of the backends that used to sit
+# behind them as insurance are gone, and both for the same reason — a fallback nobody has needed is
+# still in every copy of every executable:
+#
+# | | what it cost | why it went |
+# | --- | --- | --- |
+# | GL | 531,456 | the one backend that both leaks and loses the hairlines — see `render`'s table |
+# | D3D12 | 407,396 | `wgpu-hal::dx12` and naga's HLSL writer, for a Windows machine with no working Vulkan driver |
+#
+# The D3D12 one is the sharper trade of the two and worth stating plainly: a machine whose Vulkan
+# driver is missing or broken now has nothing to fall back to and the window will not open at all.
+# That is the decision — this is not a library hedging, it is a design system that has picked the
+# one path its strokes survive.
+#
+# Reached through `egui_wgpu::wgpu` in the code rather than through this entry, so that the types
+# `render` names cannot drift from the ones `egui-wgpu` was built against. This entry exists to
+# pin the feature set, and a consumer targeting wasm adds `webgl` to it.
+#
+# **A consumer must also give eframe `wgpu_no_default_features` instead of `wgpu`**, or eframe's
+# own `wgpu` feature — defined as `["wgpu_no_default_features", "egui-wgpu/default"]` — turns the
+# whole default back on and undoes everything above. Nothing here can prevent that from a
+# dependency; it has to be written in the application's manifest.
+wgpu = { version = "29", optional = true, default-features = false, features = [
+    "std",
+    "wgsl",
+    "vulkan",
+    "metal",
+    "webgpu",
+] }
 
 [dev-dependencies]
-# For `cargo run --example gallery` only.
+# For `cargo run --example gallery` only — and it takes the same three decisions the
+# manifest above asks every consumer to take, because an example that renders on a
+# different stack from the applications is a gallery of something else.
+#
+# `wgpu_no_default_features` rather than `wgpu`, for the reason spelled out at the top
+# of this file: eframe's `wgpu` feature is `["wgpu_no_default_features",
+# "egui-wgpu/default"]`, and the second half is every backend wgpu has — which would
+# turn the feature set pinned above back on from inside this crate's own dev graph.
+# Features unify across a workspace build, so this entry was not only mispinning the
+# gallery.
+#
+# No `glow`: `render` picks one backend and the GL one is the row that both leaks and
+# loses the hairlines. No `default_fonts`: `fonts` installs the system faces and
+# starts from `FontDefinitions::empty`, so the four epaint would bundle are 1.4 MB
+# behind a font read that does not fail.
 eframe = { version = "0.35", default-features = false, features = [
-    "wgpu",
-    "glow",
-    "default_fonts",
+    "wgpu_no_default_features",
 ] }
 # So the gallery can write its own PNG for `--screenshot`, which is how the
 # README's images are made. Already in the graph via eframe; `png` only.

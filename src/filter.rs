@@ -186,13 +186,37 @@ pub fn matches(text: &str, filter: &str) -> bool {
     Query::parse(filter).matches(text)
 }
 
-/// The syntax, short enough to put in a tooltip beside the field.
+/// The one rule that is true of a filter line however many words are in it.
 ///
-/// Here rather than in each application so that the field means the same thing
-/// everywhere *and says so* in the same words. Two lines, no columns to align — the
-/// tooltip is set in the caption face, which is not monospaced.
-pub const SYNTAX: &str = "Every word must match, in any order.\n\
-                          !word excludes it, ^word matches at the start, word$ at the end.";
+/// Here rather than in each application so that the field means the same thing everywhere *and says
+/// so* in the same words. Shown above [`MARKERS`], because it is what the markers modify.
+pub const RULE: &str = "Every word must match, in any order.";
+
+/// What may be typed, and what it does: the tooltip beside the field, as **data**.
+///
+/// Pairs rather than a sentence, and pairs rather than a formatted string, for two different reasons.
+///
+/// Against a sentence: it was one prose line holding all three — `"!word excludes it, ^word matches
+/// at the start, word$ at the end."` — which is the form that reads worst for what a syntax tooltip is
+/// for. Nobody reads it through; they arrive looking for one marker, and a sentence makes them scan
+/// three clauses to find it.
+///
+/// Against a formatted string: the marker and its meaning are set in **two colours**, and the meanings
+/// have to start at the same `x` on every line. The caption face is not monospaced, so a column cannot
+/// be made by padding with spaces — it has to be measured and drawn. That is a job for the caller's
+/// painter, so what belongs here is the words and not their layout. `components::tooltip_ui` is the
+/// tooltip that takes a drawn body; `azur-file-explorer`'s `ui::tooltip_table` is one such drawing.
+///
+/// An application with a marker of its own **appends a pair** rather than rewriting these. It should
+/// think twice first: `azur-file-explorer` had a `@git` here — a question about its own data, so rightly
+/// not in this list — and took it back out again, because a marker nobody can see is a marker nobody
+/// finds. What is a *question about an application's data* is usually a control of that application's,
+/// not syntax in a field whose syntax is specified here.
+pub const MARKERS: &[(&str, &str)] = &[
+    ("!word", "leave it out"),
+    ("^word", "match at the start"),
+    ("word$", "match at the end"),
+];
 
 /// Take a leading marker off, unless it is doubled — in which case take one off and
 /// leave the marker as part of the word.
@@ -439,11 +463,24 @@ mod tests {
     }
 
     #[test]
-    fn the_syntax_line_describes_every_marker() {
+    fn the_markers_are_all_documented_as_pairs() {
         // It is what the tooltip shows; a marker added without a word about it is a
         // feature nobody can find.
         for mark in ['!', '^', '$'] {
-            assert!(SYNTAX.contains(mark), "`{mark}` is undocumented");
+            assert!(
+                MARKERS.iter().any(|(key, _)| key.contains(mark)),
+                "`{mark}` is undocumented"
+            );
         }
+        for (key, meaning) in MARKERS {
+            assert!(!key.is_empty() && !meaning.is_empty(), "{key:?}/{meaning:?}");
+            // The pair is the layout: a key carrying its own punctuation, or a meaning that
+            // repeats the key, is a string pretending to be a pair.
+            assert!(
+                !key.contains('—') && !meaning.contains('—'),
+                "`{key}` and `{meaning}` are two columns, not one line with a dash in it"
+            );
+        }
+        assert!(RULE.ends_with('.'), "the rule is a sentence: {RULE:?}");
     }
 }

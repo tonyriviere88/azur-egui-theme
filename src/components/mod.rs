@@ -68,7 +68,7 @@ pub use feedback::{
     ToasterPosition,
 };
 pub use inputs::{
-    field_frame, field_hovered, FieldLook, NumberField, SearchBox, TextArea, TextField,
+    field_frame, field_hovered, prefix_rect, FieldLook, NumberField, SearchBox, TextArea, TextField,
 };
 pub use menus::{
     menu_divider, menu_divider_height, menu_frame, menu_item_height, menu_item_height_comfortable,
@@ -76,7 +76,8 @@ pub use menus::{
     MenuItemMetrics, Popover, Select, SelectOption,
 };
 pub use overlays::{
-    section_heading, shortcut_in, tooltip, tooltip_at_pointer, tooltip_at_pointer_ui, Dialog,
+    section_heading, shortcut_in, tooltip, tooltip_at_pointer, tooltip_at_pointer_ui, tooltip_ui,
+    Dialog,
     DialogSize, Drawer, DrawerSide, CURSOR_CLEARANCE,
 };
 pub use selection::{Checkbox, Radio, RadioGroup, Slider, Switch, SwitchLabel};

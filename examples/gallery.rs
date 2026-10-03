@@ -44,6 +44,20 @@ fn main() -> eframe::Result {
             // The gallery draws Azur's own `TitleBar`, so it asks the platform not
             // to draw a second one.
             .with_decorations(false),
+        // The same three lines every Azur application has, and here for the same
+        // reason: a gallery that presents on a different backend from the
+        // applications is a gallery of a different design system. `render` picks
+        // the backend, the adapter and the allocator — and with `glow` no longer
+        // compiled in, `Renderer::default()` is already `Wgpu`; it is said out loud
+        // because this file is the example consumers copy.
+        renderer: eframe::Renderer::Wgpu,
+        wgpu_options: azur::render::wgpu_options(),
+        // A gallery of flat rectangles, one-pixel rules and text: multisampling has
+        // nothing here to smooth that egui's own feathering does not, and dithering
+        // — on by default — puts noise into everything sampled from a texture, the
+        // glyph atlas included.
+        multisampling: 0,
+        dithering: false,
         ..Default::default()
     };
     eframe::run_native(

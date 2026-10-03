@@ -340,6 +340,17 @@ the input has run. `field_hovered` goes with it, because "is the pointer over th
 wrapper response's `hovered()` — the input inside is the topmost widget over the text area and takes
 the hover from it, which leaves a border that lights up only where you are *not* typing.
 
+One affix is a case of its own, because it is the *whole* field except for one glyph: an affix that
+is a **control**. A filter box whose funnel opens a menu of preset listings is a button, and a button
+needs a rect to interact with, a response to hang a menu on and states of its own — none of which a
+component can hand out. So the field stands aside for it: `TextField::prefix_room` keeps the leading
+affix's room and paints nothing in it, and `prefix_rect` says where that room is. The room is what must
+not be re-derived, for the reason `field_frame` is public in the first place — a box that grew a control
+in that corner by shrinking its own text rect would shuffle its words sideways the moment the control
+appeared, and it is the same figure whether the field fills the affix or the caller does. Everything
+else about the control, including registering it *after* the input so that a click there reaches the
+button and not the caret, is the application's.
+
 `tooltip_at_pointer_ui` is the same idea for the one tooltip that is not a sentence. A tooltip's measure
 here is a paragraph's — `spacing.tooltip_width`, 280 — because a tooltip is read in one glance and a long
 line is not; a row of a file listing, which has a name, a type, a size, a date and a state to say about
@@ -434,10 +445,16 @@ going grey — `Show hidden files (including dotfiles)` must not lose its ending
 [`shortcut_in`](src/components/overlays.rs) asks for all of: a `)` at the very end with a
 matching `(` that has a space and a sentence before it; **no whitespace between the brackets**,
 which is what a real aside fails and no chord ever does; every `+`-separated part starting with
-an uppercase letter or a digit, which is how key names are written and how `(optional)` is
+an uppercase letter or a **numeral**, which is how key names are written and how `(optional)` is
 caught; and at least one uppercase letter, so `(2)` is a count rather than a key. What it will
 still take is a one-word capitalised aside — `(Beta)` — and dimming that is a small wrong: it
 reads as an aside either way.
+
+A numeral and not an ASCII digit, because a key is named by whatever is printed on it. The
+leftmost key of an AZERTY number row is `²`, which Unicode files under `No` rather than `Nd`, so
+an `is_ascii_digit` guard read `Show the console (Ctrl+²)` as prose and dimmed none of it — one
+shortcut in the whole window wearing `text-primary`, in the one place nobody thinks to check. The
+uppercase rule is what still holds the guard shut either way: `(²)` alone is not a key.
 
 The menu's own shortcut slot is `text-tertiary` rather than this, and stays there. A `MenuItem`'s
 shortcut sits in a column of its own with a whole menu of labels beside it; a tooltip's is inline

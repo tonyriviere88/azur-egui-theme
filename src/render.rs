@@ -79,10 +79,25 @@
 //!
 //! # Overriding
 //!
-//! `AZUR_BACKEND=gl`, `=d3d12` or `=vulkan` picks a backend for a session without a
-//! rebuild. It exists for a machine where Vulkan is missing or misbehaves, and for
-//! telling this fault apart from a driver one: if the window is soft on Vulkan too,
-//! it is not this. `AZUR_ADAPTER=low` or `=high` does the same for the adapter.
+//! `AZUR_ADAPTER=low` or `=high` picks the adapter for a session without a rebuild.
+//! `AZUR_BACKEND=vulkan` still names the backend, though on Windows it now only
+//! names the one already in use.
+//!
+//! **`=gl` and `=d3d12` are both gone, and deliberately.** `Cargo.toml` compiles
+//! exactly one backend per platform, so those two names have nothing left to reach:
+//! OpenGL went first, as the one row of the table above that both leaks *and* loses
+//! the hairlines, and D3D12 went after it — between them 938,852 bytes of every
+//! executable, held for a machine nobody has reported. A name wgpu cannot serve is
+//! worse than no name at all: `Backends::DX12` with no D3D12 backend compiled finds
+//! no adapter, and the window fails to open with nothing to say why. So both now
+//! fall through to the default like any other unknown name, and both say so on the
+//! console.
+//!
+//! What that costs, stated plainly: **a Windows machine with no working Vulkan
+//! driver no longer has a fallback.** The window will not open. That is a
+//! deliberate trade and not an oversight — the measurement above is why there was
+//! only ever one backend worth presenting on, and carrying the other three to hedge
+//! against a driver nobody has met was 3.5% of an executable.
 //!
 //! Neither is read from wgpu's own `WGPU_BACKEND` and `WGPU_POWER_PREF`, which the
 //! defaults here deliberately override: what a window presents on should be a
@@ -199,13 +214,12 @@ fn from_name(chosen: Option<&str>) -> wgpu::Backends {
     match chosen {
         None => preferred(),
         Some("vulkan") | Some("vk") => wgpu::Backends::VULKAN,
-        Some("d3d12") | Some("dx12") => wgpu::Backends::DX12,
-        Some("gl") | Some("opengl") => wgpu::Backends::GL,
         Some("metal") => wgpu::Backends::METAL,
+        // `gl`, `opengl`, `d3d12` and `dx12` all land here on purpose, and it is not an oversight:
+        // neither backend is compiled in — see the module documentation — so naming one could only
+        // produce a window that fails to open. Falling through says so and starts anyway.
         Some(other) => {
-            eprintln!(
-                "AZUR_BACKEND={other}: not one of vulkan, d3d12, gl, metal — using the default"
-            );
+            eprintln!("AZUR_BACKEND={other}: not one of vulkan, metal — using the default");
             preferred()
         }
     }
@@ -244,12 +258,9 @@ mod tests {
 
     #[test]
     fn the_override_names_reach_their_backends() {
-        assert_eq!(from_name(Some("gl")), wgpu::Backends::GL);
-        assert_eq!(from_name(Some("opengl")), wgpu::Backends::GL);
-        assert_eq!(from_name(Some("d3d12")), wgpu::Backends::DX12);
-        assert_eq!(from_name(Some("dx12")), wgpu::Backends::DX12);
         assert_eq!(from_name(Some("vulkan")), wgpu::Backends::VULKAN);
         assert_eq!(from_name(Some("vk")), wgpu::Backends::VULKAN);
+        assert_eq!(from_name(Some("metal")), wgpu::Backends::METAL);
     }
 
     #[test]
@@ -259,6 +270,19 @@ mod tests {
         assert_eq!(from_name(Some("direct3d9")), preferred());
         assert_eq!(from_name(Some("")), preferred());
         assert!(!from_name(Some("nonsense")).is_empty());
+    }
+
+    #[test]
+    fn gl_and_d3d12_fall_back_rather_than_naming_a_backend_that_is_not_compiled_in() {
+        // `Cargo.toml` enables neither `wgpu/gles` nor `wgpu/dx12`, so `Backends::GL` or
+        // `Backends::DX12` here would ask wgpu for a backend it does not have: no adapter, and a
+        // window that never opens. The names still parse — they just cannot be honoured — so they
+        // take the same path as any other name wgpu cannot serve.
+        for name in ["gl", "opengl", "d3d12", "dx12"] {
+            assert_eq!(from_name(Some(name)), preferred(), "{name}");
+        }
+        assert!(!from_name(Some("gl")).contains(wgpu::Backends::GL));
+        assert!(!from_name(Some("d3d12")).contains(wgpu::Backends::DX12));
     }
 
     #[test]
