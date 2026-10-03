@@ -1,0 +1,41 @@
+[package]
+name = "azur-egui-theme"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "The Azur design tokens as an egui theme: palette, semantic roles, Visuals and Spacing"
+# Consumed as a path (or git) dependency; nothing here is meant for crates.io.
+publish = false
+
+[features]
+# On by default: an Azur window presenting on the wrong backend has its one-pixel
+# strokes resampled away, so `render` is part of the specification rather than an
+# extra. See `src/render.rs` for the measurement. Turn it off for a consumer that
+# does not draw through wgpu, and nothing here pulls wgpu into its graph.
+default = ["wgpu"]
+wgpu = ["dep:egui-wgpu"]
+
+[dependencies]
+# A theme is only meaningful for the exact egui it styles: `Visuals` field names
+# and defaults move between releases, and a mismatched version would resolve to a
+# second egui in the graph, whose `Context` this crate could not style at all.
+# Keep this in lockstep with the application's own egui.
+egui = { version = "0.35", default-features = false }
+
+# For `render` only, which needs `WgpuConfiguration` and `wgpu::Backends` to say
+# which backend a window presents on. Not eframe: this crate has no opinion about
+# windowing, and `egui-wgpu` is where those two types live. Same version as the
+# application's, or `WgpuConfiguration` here would be a different type from the one
+# `NativeOptions` wants.
+egui-wgpu = { version = "0.35", optional = true }
+
+[dev-dependencies]
+# For `cargo run --example gallery` only.
+eframe = { version = "0.35", default-features = false, features = [
+    "wgpu",
+    "glow",
+    "default_fonts",
+] }
+# So the gallery can write its own PNG for `--screenshot`, which is how the
+# README's images are made. Already in the graph via eframe; `png` only.
+image = { version = "0.25", default-features = false, features = ["png"] }
