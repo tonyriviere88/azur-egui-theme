@@ -62,6 +62,15 @@ pub fn menu_frame(t: &Theme) -> Frame {
         .inner_margin(Margin::symmetric(0, space::S1 as i8))
 }
 
+/// `.listbox { max-height: 280px }` — how far a `Select` or `ComboBox` list scrolls before it
+/// scrolls.
+///
+/// Named because it is now needed twice at each call site: once as the scroll area's ceiling, and
+/// once as the room the surrounding `Ui` has to be told it may use. The two drifting apart is the
+/// bug — a scroll area given less room than its own `max_height` is a list that cannot grow. See
+/// [`Menu::show`].
+const LISTBOX_HEIGHT: f32 = 280.0;
+
 /// The row height of a menu entry or a listbox option: 28px.
 ///
 /// This is the one deliberate density change against `Menu.module.css`, which puts
@@ -343,6 +352,7 @@ pub struct MenuItem<'a> {
     selected: bool,
     submenu: bool,
     danger: bool,
+    secondary: bool,
     height: f32,
     gutter: Option<bool>,
 }
@@ -356,6 +366,7 @@ impl<'a> MenuItem<'a> {
             selected: false,
             submenu: false,
             danger: false,
+            secondary: false,
             height: menu_item_height(),
             gutter: None,
         }
@@ -419,6 +430,20 @@ impl<'a> MenuItem<'a> {
 
     pub fn danger(mut self, danger: bool) -> Self {
         self.danger = danger;
+        self
+    }
+
+    /// A row whose label is not the point — the label goes `text-secondary`.
+    ///
+    /// For an entry that names a container rather than a thing to run: a group the app itself
+    /// assembled and had to invent a name for, `More…`, `Recent`. One tier down says "this is
+    /// scaffolding" without a second font or an italic, and it holds in both palettes because
+    /// `text-secondary` is a role and not a shade.
+    ///
+    /// Not for a disabled row, which is `text-disabled` and reads as unavailable rather than as
+    /// quieter; `danger` wins over this, since a destructive entry has to stay loud.
+    pub fn secondary(mut self, secondary: bool) -> Self {
+        self.secondary = secondary;
         self
     }
 }
@@ -496,6 +521,8 @@ impl Widget for MenuItem<'_> {
             t.text.disabled
         } else if self.danger {
             t.status.danger
+        } else if self.secondary {
+            t.text.secondary
         } else {
             t.text.primary
         };
@@ -707,6 +734,21 @@ impl<'a> Menu<'a> {
             .width(width + menu_chrome_width(ctx))
             .show(move |ui| {
                 ui.set_width(width);
+                // **The room the scroll area is allowed to grow into, taken rather than inherited.**
+                //
+                // An `Area` hands its content *last frame's size* as this frame's `max_rect` — see
+                // `egui::Area::content_ui` — and a `ScrollArea` fits itself into whatever room it is
+                // given without ever asking for more. Put those two together and a menu is stuck at
+                // the size of the first list it ever showed: a dropdown whose rows arrive a frame
+                // after it opens measures itself on `Reading…`, and the rows that land next frame
+                // then shrink to fit the one row of room left over. Two rows and a scrollbar, for
+                // ever, because nothing ever asks for more.
+                //
+                // `set_max_height` is a ceiling and not a size — it moves `max_rect`, never
+                // `min_rect` — so the scroll area still shrinks to its content and the popup is
+                // still only as tall as what is in it. What it stops is the menu being unable to
+                // *ask*.
+                ui.set_max_height(max_height);
                 // `gap: space-1` between entries.
                 ui.spacing_mut().item_spacing.y = 0.0;
                 // A menu is not a panel. A non-floating scroll bar allocates its
@@ -1158,13 +1200,14 @@ impl Widget for Select<'_> {
             .show(|ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 // See `Menu::show`: a floating bar keeps the listbox from carrying an
-                // empty scroll gutter.
+                // empty scroll gutter, and the height is a ceiling the scroll area has to be
+                // handed or it can never grow past the shortest list it ever showed.
                 ui.style_mut().spacing.scroll.floating = true;
+                ui.set_max_height(LISTBOX_HEIGHT);
                 let mut picked = None;
-                // `.listbox { max-height: 280px }`.
                 egui::ScrollArea::vertical()
                     .id_salt("azur-listbox")
-                    .max_height(280.0)
+                    .max_height(LISTBOX_HEIGHT)
                     .show(ui, |ui| {
                         for (i, option) in self.options.iter().enumerate() {
                             let item = ui.add_enabled(
@@ -1443,10 +1486,15 @@ impl Widget for ComboBox<'_> {
                     ui.set_width(list);
                     ui.spacing_mut().item_spacing.y = 0.0;
                     ui.style_mut().spacing.scroll.floating = true;
+                    // The list here is *filtered* as the field is typed into, which is the one
+                    // shape this bites hardest: one match makes the popup one row tall, and
+                    // rubbing the letter out again leaves fourteen matches in that one row of
+                    // room. See `Menu::show` for why the ceiling has to be handed over.
+                    ui.set_max_height(LISTBOX_HEIGHT);
                     let mut picked = None;
                     egui::ScrollArea::vertical()
                         .id_salt("azur-combo-listbox")
-                        .max_height(280.0)
+                        .max_height(LISTBOX_HEIGHT)
                         .show(ui, |ui| {
                             for i in &matches {
                                 let option = &self.options[*i];

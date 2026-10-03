@@ -872,6 +872,7 @@ fn menus(ui: &mut Ui, g: &mut Gallery) {
                     menu_divider(ui);
                     let _ = ui.add(MenuItem::new("Snap to grid").selected(true));
                     let _ = ui.add(MenuItem::new("Transform").submenu(true));
+                    let _ = ui.add(MenuItem::new("More actions").submenu(true).secondary(true));
                     ui.add_enabled(false, MenuItem::new("Paste"));
                     menu_divider(ui);
                     let _ = ui.add(MenuItem::new("Delete").icon(&icons::close).danger(true));
