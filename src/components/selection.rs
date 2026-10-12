@@ -181,10 +181,22 @@ impl Widget for Checkbox<'_> {
         if response.has_focus() {
             focus_ring(p, box_rect, corner, t.stroke.focus);
         }
-        paint_label(ui, text_rect, &self.label, &t, enabled);
+        // Lifted, so the words sit level with the box: the label is centred by its line box, which
+        // keeps room under the baseline for descenders a label mostly does not have, and that put
+        // the text visibly below the box beside it.
+        paint_label(
+            ui,
+            text_rect.translate(vec2(0.0, -CHECKBOX_LABEL_LIFT)),
+            &self.label,
+            &t,
+            enabled,
+        );
         response
     }
 }
+
+/// How far a checkbox's label is raised from the centre of its line box to be level with the box.
+const CHECKBOX_LABEL_LIFT: f32 = 2.0;
 
 /// Azur's `Radio`: one option of a group.
 ///
