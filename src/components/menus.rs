@@ -532,9 +532,15 @@ impl Widget for MenuItem<'_> {
         // `Select` option ticks, a `Menu` entry may carry a glyph. The slot is
         // advanced past either way — see `leading_w`.
         if self.selected {
+            // Lowered to the label's ink. The label is on `row_baseline`, which centres its line
+            // box and so leaves the words hanging below the middle of the row by the descender room
+            // they do not use; a tick centred on the row then sits that far above the text beside
+            // it — 1.5px at body size, measured off a capture. Moving the tick rather than the
+            // label keeps every menu's text exactly where it was. See [`super::ink_lift`].
+            let lift = super::ink_lift(ui.painter(), &t.fonts.body);
             check(
                 ui.painter(),
-                super::icon_rect(rect, x, 14.0),
+                super::icon_rect(rect, x, 14.0).translate(vec2(0.0, lift)),
                 if enabled {
                     t.accent.mark
                 } else {
