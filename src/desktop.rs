@@ -309,7 +309,11 @@ pub fn latched(t: &Theme, hovered: bool) -> (Color32, Color32) {
 /// One place, so a latched control and a selected row cannot drift apart. See [`row_fill`] for
 /// why the two sides of the palette take different rungs.
 fn chosen(t: &Theme) -> (Color32, Color32) {
-    if t.dark {
+    if let Some(f) = t.fluent {
+        // Fluent selects with a neutral, and the accent is the pill beside it. See
+        // [`Fluent`](crate::theme::Fluent).
+        (f.selected, f.selected_hover)
+    } else if t.dark {
         (t.accent.active, t.accent.default)
     } else {
         (t.accent.subtle, t.accent.subtle_hover)
@@ -321,12 +325,64 @@ fn chosen(t: &Theme) -> (Color32, Color32) {
 /// `accent-mark` — the accent as ink, which is the role's own job description. Not
 /// `accent-default`: with [`row_fill`] painting the *fill* from the accent's surface
 /// ramp, a bar from the same ramp is a bar the colour of what it is drawn on.
+///
+/// In a [`Fluent`](crate::theme::Fluent) window it is WinUI's selection indicator instead: a
+/// rounded pill 3 wide and 16 tall, centred on the row and set 3 in from its edge, and shorter on
+/// a row with no room for it.
+/// The row is the same size either way — the pill is drawn on it, not beside it.
 pub fn selection_bar(painter: &Painter, row: Rect, t: &Theme) {
+    if t.fluent.is_some() {
+        let height = PILL_HEIGHT.min(row.height() - 2.0 * PILL_CLEARANCE).max(0.0);
+        let pill = Rect::from_center_size(
+            egui::pos2(row.left() + PILL_INSET + PILL_WIDTH * 0.5, row.center().y),
+            egui::vec2(PILL_WIDTH, height),
+        );
+        painter.rect_filled(pill, CornerRadius::same(crate::tokens::radius::CIRCULAR), t.accent.mark);
+        return;
+    }
     painter.rect_filled(
         Rect::from_min_size(row.min, egui::vec2(2.0, row.height())),
         CornerRadius::ZERO,
         t.accent.mark,
     );
+}
+
+/// WinUI's `ListViewItem` selection indicator, in points.
+const PILL_WIDTH: f32 = 3.0;
+const PILL_HEIGHT: f32 = 16.0;
+/// The least room the pill leaves above and below itself on a short row.
+const PILL_CLEARANCE: f32 = 3.0;
+/// How far in from the row's left edge the pill sits: inside the row's rounded corner, as WinUI
+/// has it, and a pixel clear of a cursor ring drawn one pixel inside the row.
+const PILL_INSET: f32 = 3.0;
+
+/// The corners of a row's highlight — hovered, selected, or both.
+///
+/// Square, per [`structural_radius`]: a band across a listing. In a
+/// [`Fluent`](crate::theme::Fluent) window it is the control radius instead, which is how WinUI
+/// draws a `ListViewItem`. The rect is the row's own either way, so nothing moves.
+pub fn row_radius(t: &Theme) -> CornerRadius {
+    if t.fluent.is_some() {
+        crate::components::control_radius()
+    } else {
+        structural_radius()
+    }
+}
+
+/// The corners of a menu, and of the entries in it.
+///
+/// `(frame, entry)`. Square and square, per [`menu_frame`](crate::components::menu_frame); in a
+/// [`Fluent`](crate::theme::Fluent) window, the overlay radius and the control radius, which is
+/// WinUI's `MenuFlyout`.
+pub fn menu_radius(t: &Theme) -> (CornerRadius, CornerRadius) {
+    if t.fluent.is_some() {
+        (
+            CornerRadius::same(crate::tokens::radius::LARGE),
+            crate::components::control_radius(),
+        )
+    } else {
+        (CornerRadius::ZERO, CornerRadius::ZERO)
+    }
 }
 
 /// The colour a panel boundary shows, and the fill of the surfaces welded to it: a
@@ -678,6 +734,27 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A Fluent window rounds its row highlights and its menus, selects from its own greys, and
+    /// Azur's two sides do none of it. Panels, seams and drop targets stay square in both.
+    #[test]
+    fn only_a_fluent_window_rounds_its_rows_and_menus() {
+        for t in both() {
+            assert!(t.fluent.is_none(), "{} is drawn in Fluent's idiom", side(&t));
+            assert_eq!(row_radius(&t), structural_radius(), "{}", side(&t));
+            assert_eq!(menu_radius(&t), (CornerRadius::ZERO, CornerRadius::ZERO), "{}", side(&t));
+        }
+        let (t, _) = crate::palettes::Palette::WinUi3.build();
+        let f = t.fluent.expect("WinUI 3 is drawn in Fluent's idiom");
+        let control = crate::components::control_radius();
+        assert_eq!(row_radius(&t), control);
+        assert_eq!(menu_radius(&t), (CornerRadius::same(crate::tokens::radius::LARGE), control));
+        assert_eq!(structural_radius(), CornerRadius::ZERO, "a Fluent panel is still square");
+        assert_eq!(row_fill(&t, true, false), Some(f.selected));
+        assert_eq!(row_fill(&t, true, true), Some(f.selected_hover));
+        assert_eq!(row_fill(&t, false, true), Some(hover_fill(&t)));
+        assert_eq!(latched(&t, false).0, f.selected, "a latch is not a selected row");
     }
 
     /// Nothing structural is rounded, and a dense window has exactly two radii.

@@ -57,7 +57,7 @@ pub fn menu_frame(t: &Theme) -> Frame {
     Frame::new()
         .fill(t.bg.layer_alt)
         .stroke(Stroke::new(1.0, t.stroke.subtle))
-        .corner_radius(CornerRadius::ZERO)
+        .corner_radius(crate::desktop::menu_radius(t).0)
         .shadow(shadow::S16)
         .inner_margin(Margin::symmetric(0, space::S1 as i8))
 }
@@ -511,8 +511,9 @@ impl Widget for MenuItem<'_> {
         }
 
         // Square, and the full width of the menu: the highlight is a band across the
-        // row, not a pill floating inside it. See [`menu_frame`].
-        let corner = CornerRadius::ZERO;
+        // row, not a pill floating inside it. See [`menu_frame`]. A Fluent window rounds
+        // it, as WinUI does, on the same rect.
+        let corner = crate::desktop::menu_radius(&t).1;
         if enabled && (response.hovered() || response.has_focus()) {
             ui.painter().rect_filled(rect, corner, t.bg.control_hover);
         }

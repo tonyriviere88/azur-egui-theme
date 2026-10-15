@@ -163,7 +163,7 @@ pub fn visuals(t: &Theme) -> egui::Visuals {
     // shape. A menu here is square instead -- see
     // [`components::menu_frame`](crate::components::menu_frame) for why, and note
     // that this is what a nested submenu is painted with, so the two have to agree.
-    v.menu_corner_radius = CornerRadius::ZERO;
+    v.menu_corner_radius = crate::desktop::menu_radius(t).0;
     v.window_shadow = shadow::S16;
     v.popup_shadow = shadow::S16;
 

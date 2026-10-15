@@ -191,6 +191,34 @@ pub struct Scrollbar {
     pub thumb_hover: Color32,
 }
 
+/// Windows 11's own idiom — WinUI 3's *Fluent* — for a palette that wants the window to look like
+/// the platform rather than like Azur.
+///
+/// Two things Fluent does differently from Azur's desktop preset, and both are about *how* a
+/// thing is marked rather than about any size:
+///
+/// - **A list selects with a neutral and marks it with the accent.** A selected row is a grey a
+///   step past the hover, and the accent is spent on the short rounded pill at its left edge
+///   instead of on the row's fill. Azur fills the row from the accent's own surface ramp, which is
+///   why the selection lives here rather than on [`Accents`]: those stay the colour of a primary
+///   button, a caret and a sort mark, which in Fluent are still the accent.
+/// - **Rounded where Azur is square**: a row's highlight, a menu, a menu's entries and a tab's top.
+///   The geometry is unchanged — every row, menu entry and tab keeps its height and its width, and
+///   only the corners and the selection mark change shape.
+///
+/// Read by [`desktop`](crate::desktop) — `row_fill`, `row_radius`, `selection_bar` — and by the
+/// menus, so a palette turns the idiom on by setting [`Theme::fluent`] and nothing else.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Fluent {
+    /// A selected row at rest.
+    pub selected: Color32,
+    /// A selected row under the pointer, one rung further from the surface.
+    pub selected_hover: Color32,
+    /// A selection in a list that has not got the keyboard: still a step off the listing, and
+    /// told apart from the hover.
+    pub quiet: Color32,
+}
+
 /// Every color the theme decides, by role.
 ///
 /// Fields are public and the struct is `Clone`, so an application can take
@@ -227,6 +255,9 @@ pub struct Theme {
     /// one step off `bg.layer`, because stripes that announce themselves are
     /// harder to read across, not easier.
     pub row_alt: Color32,
+
+    /// `Some` when the window is drawn in Windows 11's idiom rather than Azur's. See [`Fluent`].
+    pub fluent: Option<Fluent>,
 
     pub fonts: Fonts,
 }
@@ -363,6 +394,7 @@ impl Theme {
             },
 
             row_alt: GRAY_3,
+            fluent: None,
             fonts: Fonts::default(),
         }
     }
@@ -498,6 +530,7 @@ impl Theme {
             },
 
             row_alt: paper::SHADE,
+            fluent: None,
             fonts: Fonts::default(),
         }
     }

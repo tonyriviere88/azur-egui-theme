@@ -1,4 +1,4 @@
-//! Named palettes for an application window: [`desktop`]'s theme in nine materials.
+//! Named palettes for an application window: [`desktop`]'s theme in ten materials.
 //!
 //! ```no_run
 //! use azur_egui_theme::palettes::Palette;
@@ -21,9 +21,12 @@
 //! - **Regions** — [`Surfaces`], one field per part of the window: title bar, path bar, panel,
 //!   headers, sidebar, status bar, seam. Azur's roles answer "how far from the surface is this",
 //!   and a palette that wants the sidebar told from the status bar is asking "which region is
-//!   this" instead. [`celestine`](mod@celestine) and [`light`](mod@light) name theirs.
+//!   this" instead. [`celestine`](mod@celestine), [`light`](mod@light) and [`winui`](mod@winui)
+//!   name theirs.
 //!
-//! Anything about *state* — one hover, one press, one selected row — stays Azur's.
+//! Anything about *state* — one hover, one press, one selected row — stays Azur's. The one
+//! exception is [`winui`](mod@winui), which is the platform's look rather than a material and
+//! selects the way the platform does: see [`Fluent`](crate::theme::Fluent).
 //!
 //! Every palette was cut for, and measured in, the file manager next door; the figures quoted
 //! below that name its status line or its code palette are that application's roles, which it
@@ -39,7 +42,7 @@ use egui::Color32;
 /// [`key`](Palette::key), and an arm in [`Palette::build`]. Nothing else, and
 /// `every_palette_is_reachable_and_round_trips` fails if any of those is forgotten.
 ///
-/// Nine of them at the moment, six of which are one rule with a different mineral in it — see
+/// Ten of them at the moment, six of which are one rule with a different mineral in it — see
 /// [`family`](mod@family) — and the machinery is deliberately more than that needs: see
 /// [`ALIASES`](Palette::ALIASES), which only exists because a palette has already been renamed
 /// once.
@@ -64,6 +67,9 @@ pub enum Palette {
     /// Metal: the family's ladder lifted as far as the measurements allow, with the rest of its
     /// brightness in the pigment. See [`family::SILVER`](mod@family).
     Silver,
+    /// Windows 11's own dark theme, WinUI 3's: neutral greys, the platform's default accent, and
+    /// the platform's way of marking things — see [`winui`](mod@winui).
+    WinUi3,
     /// Pale sky blue, after the mineral: [`Theme::light`]'s ink, accent and status hues on a set
     /// of blue chrome surfaces of its own, around [`Light`](Self::Light)'s listing. See
     /// [`celestine`](mod@celestine).
@@ -83,9 +89,9 @@ pub enum Palette {
 impl Palette {
     /// Every palette, in the order the menu lists them: Azur's own dark theme first because it is
     /// the default, then [the family](mod@family) up its own ladder — black, the four hues, metal
-    /// — and the two light ones last, the grey before the blue. [`menu`] groups them by side
-    /// under a heading each, which is why the dark ones come first as a block.
-    pub const ALL: [Self; 9] = [
+    /// — then Windows 11's own, and the two light ones last, the grey before the blue. [`menu`]
+    /// groups them by side under a heading each, which is why the dark ones come first as a block.
+    pub const ALL: [Self; 10] = [
         Self::Dark,
         Self::Onyx,
         Self::Cobalt,
@@ -93,6 +99,7 @@ impl Palette {
         Self::Amethyst,
         Self::Citrine,
         Self::Silver,
+        Self::WinUi3,
         Self::Light,
         Self::Celestine,
     ];
@@ -126,6 +133,7 @@ impl Palette {
             Self::Amethyst => "Amethyst theme",
             Self::Citrine => "Citrine theme",
             Self::Silver => "Silver theme",
+            Self::WinUi3 => "WinUI 3 theme",
             Self::Celestine => "Celestine theme",
             Self::Light => "Light theme",
         }
@@ -145,6 +153,7 @@ impl Palette {
             Self::Amethyst => "amethyst",
             Self::Citrine => "citrine",
             Self::Silver => "silver",
+            Self::WinUi3 => "winui3",
             Self::Celestine => "celestine",
             Self::Light => "light",
         }
@@ -195,6 +204,7 @@ impl Palette {
             Self::Amethyst => family::AMETHYST.apply(&mut t),
             Self::Citrine => family::CITRINE.apply(&mut t),
             Self::Silver => family::SILVER.apply(&mut t),
+            Self::WinUi3 => winui::apply(&mut t),
             Self::Celestine => celestine::apply(&mut t),
             Self::Light => light::apply(&mut t),
         };
@@ -956,6 +966,149 @@ pub mod light {
     }
 }
 
+pub mod winui {
+    //! [`Palette::WinUi3`](super::Palette::WinUi3): Windows 11's dark theme, as WinUI 3 draws it.
+    //!
+    //! Every value is a Fluent token, and where the token is translucent it is composited over the
+    //! surface WinUI puts it on — Mica's dark base `#202020`, or the listing's `#191919` — because
+    //! nothing in this window is translucent. The token each one comes from is beside it.
+    //!
+    //! # The surfaces are Explorer's
+    //!
+    //! | region | value | `L*` | |
+    //! | --- | --- | --- | --- |
+    //! | [`TITLEBAR`] — the tab strip | `#202020` | 12.25 | Mica, `SolidBackgroundFillColorBase` |
+    //! | [`BAR`] — the active tab, the path bar, the seam | `#2c2c2c` | 18.00 | `LayerOnMicaBaseAltFillColorDefault` |
+    //! | [`PANEL`] — the listing, its headers, the sidebar, the status bar | `#191919` | 8.76 | Explorer's content pane |
+    //!
+    //! Explorer gives the navigation pane, the listing and the status bar one surface and divides
+    //! them with a line, so this does too. The seam is the bar's colour, as it is in
+    //! [`Palette::Dark`](super::Palette::Dark).
+    //!
+    //! **The panel is not free.** It is under the two ceilings [`family`](super::family) measured
+    //! for a dark palette: `status.danger` stays readable on a status bar under `L*` 11.52 (here
+    //! 4.76:1) and the file manager's comment green on a panel under `L*` 10.13 (4.68:1). Mica's
+    //! own `#202020` is over both, which is why the listing is Explorer's darker grey and not the
+    //! window's.
+    //!
+    //! # The accent is the platform's default
+    //!
+    //! `SystemAccentColorLight2`, `#60CDFF`, is what WinUI fills with in the dark theme — a primary
+    //! button, a checked box, a caret, the selection pill — with **black** ink on it
+    //! (`TextOnAccentFillColorPrimary`), 11.7:1. Its hover and press are the same blue at 90% and
+    //! 80% over Mica, which is the way WinUI goes: a pressed accent *dims*. `Light3`, `#99EBFF`, is
+    //! a link. The focus ring is WinUI's white.
+    //!
+    //! # A selection is grey
+    //!
+    //! WinUI selects a list item with a neutral and puts the accent on a pill beside it, so the
+    //! selected fills are greys — see [`Fluent`](crate::theme::Fluent), which is what turns the
+    //! idiom on. WinUI's own list uses *one* grey for a hover and a selection and leaves the pill to
+    //! tell them apart; here the selection is a step past the hover instead, because a window with
+    //! two panes shows four row states at once and a grey palette has nothing else to tell them
+    //! apart with. Every pair is 3 ΔL\* or more apart:
+    //!
+    //! | fill | value | `L*` |
+    //! | --- | --- | --- |
+    //! | the listing | `#191919` | 8.76 |
+    //! | a selection in a pane without the keyboard | `#232323` | 13.71 |
+    //! | a hovered row — `SubtleFillColorSecondary` | `#2d2d2d` | 18.47 |
+    //! | a selected row | `#373737` | 23.07 |
+    //! | a hovered selected row | `#414141` | 27.53 |
+    //!
+    //! The pill is 6.6:1 on a selected row, against the 3.1:1 Azur's bar has on its blue one.
+    //!
+    //! # What stays Azur's
+    //!
+    //! The ink and the status hues, for the reason the [module](super) gives. Azur's text ramp is
+    //! within a chroma point of neutral already, and the status hues are categories.
+
+    use egui::Color32;
+
+    const fn hex(v: u32) -> Color32 {
+        Color32::from_rgb((v >> 16) as u8, (v >> 8) as u8, v as u8)
+    }
+
+    pub const TITLEBAR: Color32 = hex(0x202020);
+    pub const BAR: Color32 = hex(0x2c2c2c);
+    pub const PANEL: Color32 = hex(0x191919);
+
+    /// The accent, `SystemAccentColorLight2`.
+    pub const ACCENT: Color32 = hex(0x60cdff);
+
+    /// The surfaces, the accent and the idiom carried into the Azur roles, and the regions.
+    pub fn apply(az: &mut super::Theme) -> super::Surfaces {
+        // The window, showing through: behind a code block and the console's log, which is what
+        // makes monospace read as recessed. `SolidBackgroundFillColorBaseAlt`.
+        az.bg.canvas = hex(0x0a0a0a);
+        az.bg.layer = PANEL;
+        az.bg.control_disabled = PANEL;
+        // The popover surface — every menu and tooltip — and the tab band, a hovered tab and an
+        // unfocused pane's active tab. `SolidBackgroundFillColorTertiary`, a step under the menu
+        // flyout's acrylic.
+        az.bg.layer_alt = hex(0x282828);
+        // `CardBackgroundFillColorDefault` over Mica.
+        az.bg.card = hex(0x2b2b2b);
+        // `ControlFillColorDefault` over the listing: a field or a button at rest.
+        az.bg.control = hex(0x272727);
+        // `SubtleFillColorSecondary` over the listing. Both tokens, so a hovered row, button, tab,
+        // menu entry and card stay one colour.
+        az.bg.control_hover = hex(0x2d2d2d);
+        az.bg.card_hover = az.bg.control_hover;
+        // The loudest neutral: a panel edge, the find bar's outline, the checkerboard's dark
+        // square, a row while it is dragged.
+        az.bg.control_active = hex(0x3b3b3b);
+        az.stroke.default = az.bg.control_active;
+        // `SmokeFillColorDefault`: black at 30%.
+        az.bg.overlay = Color32::from_rgba_unmultiplied(0, 0, 0, 77);
+        // A zebra stripe: white at 2% over the listing, as faint as WinUI's own.
+        az.row_alt = hex(0x1e1e1e);
+
+        az.stroke.subtle = BAR;
+        az.stroke.control = hex(0x454545);
+        // `ControlStrongStrokeColorDefault`, a little short of it: a checkbox's outline, and the
+        // dashed ring on the row the cursor is on.
+        az.stroke.strong = hex(0x8a8a8a);
+        az.stroke.focus = Color32::WHITE;
+        az.scrollbar.thumb = hex(0x6e6e6e);
+        az.scrollbar.thumb_hover = hex(0x9a9a9a);
+
+        // `AccentFillColorDefault`, `Secondary` (90%) and `Tertiary` (80%), over Mica.
+        az.accent.default = ACCENT;
+        az.accent.hover = hex(0x5abce9);
+        az.accent.active = hex(0x53aad2);
+        // `AccentFillColorDisabled`: white at 16% over Mica.
+        az.accent.disabled = hex(0x434343);
+        az.accent.mark = ACCENT;
+        // The accent at 12%, 22% and 32% over the listing: a badge, a find hit. The top rung is
+        // what a hit takes on a selected row, so it sits clear of the lightest selected grey.
+        az.accent.subtle = hex(0x222f35);
+        az.accent.subtle_hover = hex(0x29414c);
+        az.accent.subtle_active = hex(0x305363);
+        az.status.info = ACCENT;
+        az.status.info_subtle = az.accent.subtle;
+        az.text.on_accent = Color32::BLACK;
+        // `AccentTextFillColorPrimary`, `SystemAccentColorLight3`.
+        az.text.link = hex(0x99ebff);
+
+        az.fluent = Some(crate::theme::Fluent {
+            selected: hex(0x373737),
+            selected_hover: hex(0x414141),
+            quiet: hex(0x232323),
+        });
+
+        super::Surfaces {
+            titlebar: TITLEBAR,
+            bar: BAR,
+            panel: PANEL,
+            header: PANEL,
+            sidebar: PANEL,
+            status: PANEL,
+            separator: BAR,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1038,11 +1191,57 @@ mod tests {
         }
 
         // And every palette in the family is back on the map, because each varies the roles
-        // rather than the regions.
+        // rather than the regions. WinUI 3 is dark and not of the family: Explorer's regions are
+        // its own.
         for (p, t, s) in all() {
-            if p.is_dark() {
+            if p.is_dark() && p != Palette::WinUi3 {
                 assert_eq!(s, Surfaces::from_theme(&t), "{p:?} has named a region of its own");
             }
+        }
+    }
+
+    /// [`Palette::WinUi3`] selects the way WinUI does — in grey, with the accent on a pill — and so
+    /// has to tell its row states apart by lightness alone, as the two hueless palettes of the
+    /// family do. It is the only palette drawn in [`Fluent`](crate::theme::Fluent)'s idiom.
+    #[test]
+    fn winui_selects_in_grey_and_marks_it_with_the_accent() {
+        for (p, t, _) in all() {
+            assert_eq!(t.fluent.is_some(), p == Palette::WinUi3, "{p:?} has the wrong idiom");
+        }
+        let (t, s) = Palette::WinUi3.build();
+        let f = t.fluent.expect("WinUI 3 is drawn in Fluent's idiom");
+        let grey = |c: Color32| c.r() == c.g() && c.g() == c.b();
+        let states = [
+            ("the listing", s.panel),
+            ("a quiet selection", f.quiet),
+            ("a hovered row", t.bg.control_hover),
+            ("a selected row", f.selected),
+            ("a hovered selected row", f.selected_hover),
+        ];
+        for (i, (what, a)) in states.iter().enumerate() {
+            assert!(grey(*a), "{what} is {a:?}, which is not a grey");
+            for (other, b) in &states[i + 1..] {
+                let got = apart(*a, *b);
+                assert!(got >= SAME, "{what} and {other} are only {got:.1} ΔL* apart");
+            }
+            let got = ratio(t.text.primary, *a);
+            assert!(got >= TEXT, "a name on {what} is {got:.2}:1");
+            let got = ratio(t.text.secondary, *a);
+            assert!(got >= SHAPE, "metadata on {what} is {got:.2}:1");
+        }
+        // The pill is the whole of what says "selected" in a pane with the keyboard.
+        for (what, fill) in [("selected", f.selected), ("hovered selected", f.selected_hover)] {
+            let got = ratio(t.accent.mark, fill);
+            assert!(got >= SHAPE, "the pill is {got:.2}:1 on a {what} row");
+        }
+        // A pale accent takes dark ink, in every state a filled control has.
+        for (what, fill) in [
+            ("at rest", t.accent.default),
+            ("hovered", t.accent.hover),
+            ("pressed", t.accent.active),
+        ] {
+            let got = ratio(t.text.on_accent, fill);
+            assert!(got >= TEXT, "a primary button's label {what} is {got:.2}:1");
         }
     }
 

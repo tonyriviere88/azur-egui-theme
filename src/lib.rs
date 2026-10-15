@@ -185,5 +185,7 @@ pub use style::{
     install, install_dark, install_light, line_height, spacing, style, text_style, visuals,
     StyleOptions,
 };
-pub use theme::{Accents, Backgrounds, Fonts, Scrollbar, Status, Strokes, TextColors, Theme};
+pub use theme::{
+    Accents, Backgrounds, Fluent, Fonts, Scrollbar, Status, Strokes, TextColors, Theme,
+};
 pub use widgets::{list_items, scrollbar};
